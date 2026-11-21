@@ -294,7 +294,12 @@ export const leadsQuery = z.object({
     .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
     .optional()
     .transform((v) => v === '1' || v === 'true'),
-  limit: z.coerce.number().int().min(1).max(5000).default(2000),
+  /**
+   * At most this many, newest first. Absent = every matching lead: the old
+   * silent default of 2,000 hid a big studio's oldest open leads (speed audit,
+   * 21 Nov). The Leads page itself reads a page at a time (GET /crm/leads/page).
+   */
+  limit: z.coerce.number().int().min(1).max(5000).optional(),
   pipeline_id: uuid.optional(),
   stage_id: uuid.optional(),
   contact_id: uuid.optional(),
@@ -326,6 +331,114 @@ export const leadsQuery = z.object({
     .transform((v) => v === '1' || v === 'true'),
 })
 export type LeadsQuery = z.infer<typeof leadsQuery>
+
+/** "__none" in a facet list stands for "not set". */
+const facetList = z
+  .string()
+  .max(4000)
+  .optional()
+  .transform((v) => (v ? v.split(',').map((x) => x.trim()).filter((x) => x.length > 0 && x.length <= 120).slice(0, 50) : []))
+
+/** The built-in views of the Leads page (`features/crm/builtin-views.ts`). */
+export const leadBuiltinView = z.enum(['today', 'overdue', 'uncontacted', 'no_follow_up', 'hot', 'all'])
+/** The quick chips a saved view can carry (`QuickFilter` in features/crm/leads.ts). */
+export const leadQuickFilter = z.enum(['due_today', 'overdue', 'hot', 'uncontacted', 'proposal_sent', 'unassigned', 'no_follow_up'])
+export type LeadQuickFilter = z.infer<typeof leadQuickFilter>
+
+/**
+ * GET /crm/leads/page and /crm/leads/columns (speed audit, 21 Nov: a studio
+ * with 1,372 open leads downloaded 1.31 MB on every open of Leads). Every
+ * filter the page offers is applied here, so a page is never empty because
+ * the matches are further down. `day_start` is the viewer's midnight, so
+ * "overdue" and "today" mean their day.
+ */
+export const leadPageQuery = z.object({
+  outcome: leadOutcome.default('open'),
+  include_archived: z
+    .union([z.literal('1'), z.literal('0'), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => v === '1' || v === 'true'),
+  /** Leads in this pipeline (a lead with none sits in the default one). */
+  pipeline_id: uuid.optional(),
+  /** One column of the board; `none` = no stage. */
+  stage_id: z.union([uuid, z.literal('none')]).optional(),
+  view: leadBuiltinView.optional(),
+  /** A saved view's chips, comma separated; every one must hold. */
+  quick: facetList.pipe(leadQuickFilter.array()),
+  status: z.string().trim().max(40).optional(),
+  /** A saved view's owner: a user id or `none`. */
+  assignee: z.union([uuid, z.literal('none')]).optional(),
+  quality: z.string().trim().max(40).optional(),
+  tag_id: uuid.optional(),
+  /** The toolbar's facets, comma separated, `__none` = not set. */
+  f_stage: facetList,
+  f_owner: facetList,
+  f_event: facetList,
+  f_quality: facetList,
+  f_tag: facetList,
+  f_source: facetList,
+  f_partner: facetList,
+  due: z.enum(['overdue', 'today', 'week', 'none']).optional(),
+  event_from: isoDate.optional(),
+  event_to: isoDate.optional(),
+  /** Came in at or after this moment. */
+  created_from: isoDateTime.optional(),
+  budget_min: z.coerce.number().min(0).optional(),
+  budget_max: z.coerce.number().min(0).optional(),
+  hot: z
+    .union([z.literal('1'), z.literal('0')])
+    .optional()
+    .transform((v) => v === '1'),
+  contacted: z.enum(['never', 'yes']).optional(),
+  q: z.string().trim().max(200).optional(),
+  day_start: isoDateTime.optional(),
+  /** `urgency` is the list's order (late first); `newest` a board column's. */
+  order: z.enum(['urgency', 'newest']).default('newest'),
+  cursor: z.string().max(400).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+})
+export type LeadPageQuery = z.infer<typeof leadPageQuery>
+
+/** One page of leads: the rows, where the next page starts, and how many match in all. */
+export const leadPage = z.object({
+  items: crmLeadCard.array(),
+  next_cursor: z.string().nullable().default(null),
+  /** Every lead matching, not just this page; sent with the first page only. */
+  total: z.number().int().nullable().default(null),
+})
+export type LeadPage = z.infer<typeof leadPage>
+
+/** The board's first cards per stage, each with its own total. */
+export const leadColumns = z.object({
+  columns: z
+    .array(
+      z.object({
+        stage_id: uuid.nullable(),
+        total: z.number().int(),
+        value: z.number().default(0),
+        items: crmLeadCard.array(),
+        next_cursor: z.string().nullable().default(null),
+      }),
+    )
+    .default([]),
+  total: z.number().int().default(0),
+  value: z.number().default(0),
+})
+export type LeadColumns = z.infer<typeof leadColumns>
+
+/** GET /crm/leads/counts: the size of each built-in view and chip, over every open lead. */
+export const leadCounts = z.object({
+  all: z.number().int().default(0),
+  today: z.number().int().default(0),
+  overdue: z.number().int().default(0),
+  due_today: z.number().int().default(0),
+  uncontacted: z.number().int().default(0),
+  no_follow_up: z.number().int().default(0),
+  hot: z.number().int().default(0),
+  proposal_sent: z.number().int().default(0),
+  unassigned: z.number().int().default(0),
+})
+export type LeadCounts = z.infer<typeof leadCounts>
 
 /** A move to lost is only valid with its reason — mirrors the DB trigger. */
 const lostNeedsReason = (v: { status?: string | undefined; lost_reason?: string | null | undefined }): boolean =>

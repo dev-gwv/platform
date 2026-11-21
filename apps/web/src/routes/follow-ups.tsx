@@ -9,13 +9,15 @@ import { Input } from '@/shared/ui/input'
 import { Segmented } from '@/shared/ui/segmented'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { SEARCH_MIN, useLeadCards, useLeadSearch, useSavedViews } from '@/features/crm/api'
+import { SEARCH_MIN, useLeadCards, useLeadCounts, useLeadPages, useLeadSearch, useSavedViews } from '@/features/crm/api'
+import { leadFilterParams, localDayStart, pageRows } from '@/features/crm/lead-pages'
+import { ShowMoreLeads } from '@/features/crm/ShowMoreLeads'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
 import { LeadDrawerById } from '@/features/crm/LeadDrawerById'
 import { ViewPicker, type ViewChoice } from '@/features/crm/ViewPicker'
-import { closedOutcomeFor, inView, openingView, viewName } from '@/features/crm/builtin-views'
+import { viewName } from '@/features/crm/builtin-views'
 import { toLeadQuery, toSavedQuery } from '@/features/crm/views'
-import { EMPTY_QUERY, applyQuery, countsFor, isOpen, isUncontacted, type LeadQuery } from '@/features/crm/leads'
+import { EMPTY_QUERY, type LeadQuery, type QuickFilter } from '@/features/crm/leads'
 import { InboxTab } from '@/features/crm/tabs/InboxTab'
 import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
@@ -32,6 +34,7 @@ import { DateField } from '@/shared/ui/date-field'
 import { cn } from '@/shared/ui/cn'
 
 const FACETS_KEY = 'crm:facets'
+const NO_LEADS: readonly never[] = []
 const EXTRAS_KEY = 'crm:extras'
 type Mode = 'list' | 'board' | 'pipeline'
 
@@ -145,45 +148,50 @@ function Crm() {
     void navigate({ to: '/follow-ups', search: {} as never, replace: true })
   }, [hasLeadLink]) // fires once, off the initial URL
 
-  // The page works from open leads, as slim cards: the board, the views and
-  // their counts are all about leads still being worked. Booked and lost ones
-  // load only for a saved view that asks for them, archived ones only on
-  // "Show archived", and the drawer reads its one lead whole, by id.
-  const active = useLeadCards({ outcome: 'open' })
+  // The page reads a page at a time (speed audit, 21 Nov: a studio with
+  // 1,372 open leads downloaded 1.31 MB on every open, and past 2,000 the
+  // oldest open leads silently fell off). The pipeline asks for each stage's
+  // first 30 cards with its own total; the list and the due board ask for a
+  // hundred at a time, late first. Every view, saved view, facet and filter
+  // goes to the server, so a page is never short; the view counts come from
+  // GET /crm/leads/counts; the drawer reads its one lead whole, by id.
   const { data: savedViews } = useSavedViews()
-  const allOpen = useMemo(() => active.data ?? [], [active.data])
-  const notContacted = useMemo(() => allOpen.filter(isUncontacted).length, [allOpen])
 
   // One clock for the page, so a lead cannot be "due today" in the picker and
   // "overdue" in the list because two components asked at different moments.
-  const now = useMemo(() => new Date(), [active.data])
+  // A new day (a tab left open overnight) moves it on the next minute.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => {
+      const fresh = new Date()
+      if (fresh.toDateString() !== now.toDateString()) setNow(fresh)
+    }, 60_000)
+    return () => clearInterval(t)
+  }, [now])
+  const dayStart = localDayStart(now)
+  const counts = useLeadCounts(dayStart)
+  const c = counts.data
+  const notContacted = c?.uncontacted ?? 0
+  const viewSizes = useMemo(
+    () => (c ? { today: c.today, overdue: c.overdue, uncontacted: c.uncontacted, no_follow_up: c.no_follow_up, hot: c.hot, all: c.all } : undefined),
+    [c],
+  )
 
   // Which view to land on is a question about the data, so it can only be
-  // answered once the data is here -- and only once, or every refetch would
-  // drag someone back to Today while they were reading something else.
-  // The pipeline opens whole -- every open lead in its column. Only the list
-  // lands on "who do I owe a call" (Today's calls is one tap away either way).
-  const landing = mode === 'list' ? openingView(allOpen, now) : 'all'
+  // answered once the counts are here -- and only once, or every refetch
+  // would drag someone back to Today while they were reading something else.
+  // The pipeline opens whole; only the list lands on "who do I owe a call".
+  const landing = mode === 'list' ? (c && c.today > 0 ? 'today' : c && c.uncontacted > 0 ? 'uncontacted' : 'all') : 'all'
   useEffect(() => {
-    if (view === null && !active.isLoading) setView({ kind: 'builtin', key: landing })
-  }, [view, active.isLoading, landing])
+    if (view === null && !counts.isLoading) setView({ kind: 'builtin', key: landing })
+  }, [view, counts.isLoading, landing])
 
   const current: ViewChoice = view ?? { kind: 'builtin', key: 'today' }
   const saved = savedViews ?? []
 
-  // A saved view on the list may ask for booked or lost leads; only then are
-  // they fetched. "Show archived" widens the same read to the archive.
-  const closedNeed = mode === 'list' ? closedOutcomeFor(current, saved) : null
-  const wide = useLeadCards({
-    outcome: closedNeed ?? 'open',
-    includeArchived: showArchived,
-    enabled: showArchived || closedNeed !== null,
-  })
-  const wideOn = showArchived || closedNeed !== null
-  const allLeads = useMemo(() => (wideOn ? (wide.data ?? allOpen) : allOpen), [wideOn, wide.data, allOpen])
   // With no open lead, one more row (of any kind) tells an empty studio from
   // one that has booked or lost everything it had.
-  const openEmpty = !active.isLoading && allOpen.length === 0
+  const openEmpty = !counts.isLoading && (c?.all ?? 0) === 0
   const anyLead = useLeadCards({ outcome: 'all', includeArchived: true, limit: 1, enabled: openEmpty })
 
   const label =
@@ -191,25 +199,28 @@ function Crm() {
       ? (saved.find((v) => v.id === current.id)?.name ?? 'Saved view')
       : viewName(current.key)
 
-  /** The rows this view is, before the search box narrows them further. */
-  const inViewRows = useMemo(() => {
-    const source = allLeads
-    // The board and the stage board both want open leads only -- a won deal has
-    // no next call and no stage to sit in.
-    if (mode !== 'list') {
-      const open = source.filter(isOpen)
-      if (current.kind === 'saved') {
-        const v = saved.find((x) => x.id === current.id)
-        return v ? applyQuery(open, toLeadQuery(v.query), now) : open
-      }
-      return inView(open, current.key, now)
-    }
-    if (current.kind === 'saved') {
-      const v = saved.find((x) => x.id === current.id)
-      return v ? applyQuery(source, toLeadQuery(v.query), now) : source.filter(isOpen)
-    }
-    return inView(source, current.key, now)
-  }, [current, mode, allLeads, saved, now])
+  // A saved view's fields, and in the list the list's own chips, merged.
+  const savedQuery = useMemo(() => {
+    const v = current.kind === 'saved' ? saved.find((x) => x.id === current.id) : undefined
+    const base = v ? toLeadQuery(v.query) : null
+    if (mode !== 'list') return base
+    if (!base) return query === EMPTY_QUERY ? null : query
+    return { ...base, filters: [...new Set([...base.filters, ...query.filters])] }
+  }, [current, saved, mode, query])
+
+  /** Every filter on screen, as the server reads it. The boards only ever show open leads. */
+  const filters = useMemo(() => {
+    const p = leadFilterParams({
+      view: current.kind === 'builtin' ? current.key : null,
+      saved: savedQuery,
+      facets,
+      extras,
+      showArchived,
+      now,
+    })
+    if (mode !== 'list') p.delete('outcome')
+    return p.toString()
+  }, [current, savedQuery, facets, extras, showArchived, now, mode])
 
   // A quarter of a second of quiet before we ask the server, so typing a phone
   // number is one request and not eleven.
@@ -221,43 +232,37 @@ function Crm() {
 
   const searching = debounced.trim().length >= SEARCH_MIN
   const found = useLeadSearch(debounced)
+  const pages = useLeadPages(filters, mode !== 'pipeline' && !searching)
+  const paged = useMemo(() => pageRows(pages.data?.pages), [pages.data])
+  const pagedTotal = pages.data?.pages[0]?.total ?? paged.length
 
-  /** The same match the server makes, for the rows already in hand. */
-  const clientMatch = useMemo(() => {
-    const needle = text.trim().toLowerCase()
-    if (!needle) return inViewRows
-    return inViewRows.filter((l) =>
-      [l.name, l.phone, l.email, l.notes_preview, l.assignee_name]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(needle)),
-    )
-  }, [inViewRows, text])
+  // Search ignores the view and the archive ("where did that person go"), as
+  // before: its answer (every lead, archived included) is narrowed by the
+  // facets and filters in the browser.
+  const unfaceted = searching && found.data ? found.data : paged
+  const rows = useMemo(
+    () => (searching && found.data ? applyExtras(applyFacets(found.data, facets), extras, now) : paged),
+    [searching, found.data, facets, extras, now, paged],
+  )
 
-  // While the request is in flight the local matches stand in, so the list
-  // never blinks empty between keystrokes. Once it lands, the server's answer
-  // wins -- it is the one that has seen every lead.
-  const unfaceted = searching && found.data ? found.data : clientMatch
-  const rows = useMemo(() => applyExtras(applyFacets(unfaceted, facets), extras, now), [unfaceted, facets, extras, now])
-
-  const chipCounts = useMemo(() => countsFor(allOpen, now), [allOpen, now])
+  const chipCounts = useMemo<Record<QuickFilter, number>>(
+    () => ({
+      due_today: c?.due_today ?? 0,
+      overdue: c?.overdue ?? 0,
+      hot: c?.hot ?? 0,
+      uncontacted: c?.uncontacted ?? 0,
+      proposal_sent: c?.proposal_sent ?? 0,
+      unassigned: c?.unassigned ?? 0,
+      no_follow_up: c?.no_follow_up ?? 0,
+    }),
+    [c],
+  )
   // The card in hand, if there is one, stands in while the drawer reads the
   // whole lead; a ?lead= link to a lead not on screen is read by id alone.
-  const selectedCard = openLead
-    ? ([...(found.data ?? []), ...allLeads, ...allOpen].find((l) => l.id === openLead) ?? null)
-    : null
+  const selectedCard = openLead ? ([...(found.data ?? []), ...paged].find((l) => l.id === openLead) ?? null) : null
   const isEmptyStudio = openEmpty && !anyLead.isLoading && (anyLead.data?.length ?? 0) === 0 && !searching
-
-  // The pipeline's heads come from the server while nothing narrows the
-  // board; a filter or a search counts what is left on screen instead.
-  const serverCounts =
-    mode === 'pipeline' &&
-    current.kind === 'builtin' &&
-    current.key === 'all' &&
-    !searching &&
-    text.trim() === '' &&
-    facetsOn === 0 &&
-    extrasOn === 0 &&
-    !showArchived
+  const loadingFirst = counts.isLoading || (mode !== 'pipeline' && !searching && pages.isLoading)
+  const failed = counts.isError ? counts : mode !== 'pipeline' && !searching && pages.isError ? pages : null
 
   return (
     <>
@@ -288,7 +293,7 @@ function Crm() {
               </span>
               Enquiry form & QR
             </Link>
-            <MoreLeadTools count={allOpen.length} />
+            <MoreLeadTools count={c?.all ?? 0} />
             <AddLeadDialog onAdded={(id) => setOpenLead(id)} />
           </div>
         }
@@ -315,7 +320,8 @@ function Crm() {
           ]}
         />
         <ViewPicker
-          leads={allOpen}
+          leads={NO_LEADS}
+          counts={viewSizes}
           now={now}
           value={current}
           onChange={setView}
@@ -402,12 +408,12 @@ function Crm() {
       )}
 
       <div className="mt-4">
-        {active.isLoading ? (
+        {loadingFirst ? (
           <SkeletonList rows={5} columns={4} />
-        ) : active.isError ? (
-          <ErrorState error={active.error} onRetry={() => void active.refetch()} />
+        ) : failed ? (
+          <ErrorState error={failed.error} onRetry={() => void failed.refetch()} />
         ) : mode === 'pipeline' ? (
-          <PipelineTab leads={rows} onOpen={setOpenLead} serverCounts={serverCounts} />
+          <PipelineTab leads={rows} onOpen={setOpenLead} paged={searching ? undefined : { filters }} />
         ) : mode === 'board' ? (
           <FollowUpBoardTab leads={rows} now={now} onOpen={setOpenLead} />
         ) : (
@@ -421,6 +427,15 @@ function Crm() {
             onOpen={setOpenLead}
             showArchived={showArchived}
             onShowArchived={setShowArchived}
+          />
+        )}
+        {mode !== 'pipeline' && !searching && !loadingFirst && (
+          <ShowMoreLeads
+            shown={paged.length}
+            total={pagedTotal}
+            hasMore={!!pages.hasNextPage}
+            loading={pages.isFetchingNextPage}
+            onMore={() => void pages.fetchNextPage()}
           />
         )}
       </div>

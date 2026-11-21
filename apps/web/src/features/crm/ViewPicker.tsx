@@ -36,9 +36,12 @@ export function ViewPicker({
   saved,
   label,
   manage,
+  counts: given,
 }: {
   /** Open leads, unfiltered — the counts describe the whole desk. */
   leads: readonly LeadRow[]
+  /** The counts from the server (GET /crm/leads/counts), when the page holds only a page of leads. */
+  counts?: Record<BuiltinViewKey, number> | undefined
   now: Date
   value: ViewChoice
   onChange: (v: ViewChoice) => void
@@ -53,7 +56,7 @@ export function ViewPicker({
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
-  const counts = viewCounts(leads, now)
+  const counts = given ?? viewCounts(leads, now)
 
   // Close on an outside click or Escape. A menu that traps you is worse than
   // no menu, and this one sits over the list people are trying to read.

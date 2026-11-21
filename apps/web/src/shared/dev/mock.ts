@@ -1351,6 +1351,25 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
     )
     return atStage(rows, 'partial')
   }
+  // The paged reads (speed audit, 21 Nov): the mock has a handful of open
+  // leads, so every one fits on the first page and filters are not applied.
+  if (method === 'GET' && (path.startsWith('/crm/leads/page') || path.startsWith('/crm/leads/columns') || path.startsWith('/crm/leads/counts'))) {
+    const open = atStage(dealLeads(), 'partial').filter((l) => l.status !== 'converted' && l.status !== 'lost') as Array<
+      Record<string, unknown> & { stage_id?: string | null; deal_value?: number | null; status: string }
+    >
+    if (path.startsWith('/crm/leads/page')) return { items: open, next_cursor: null, total: open.length }
+    if (path.startsWith('/crm/leads/counts')) {
+      return { all: open.length, uncontacted: open.filter((l) => l.status === 'new' && !l.last_contacted_at).length }
+    }
+    const byStage = new Map<string | null, typeof open>()
+    for (const l of open) byStage.set(l.stage_id ?? null, [...(byStage.get(l.stage_id ?? null) ?? []), l])
+    const worth = (ls: typeof open) => ls.reduce((n, l) => n + (l.deal_value ?? 0), 0)
+    return {
+      columns: [...byStage].map(([stage_id, items]) => ({ stage_id, total: items.length, value: worth(items), items, next_cursor: null })),
+      total: open.length,
+      value: worth(open),
+    }
+  }
   if (method === 'GET' && path.startsWith('/crm/leads/summary')) {
     const open = atStage(dealLeads(), 'partial').filter((l) => l.status !== 'converted' && l.status !== 'lost')
     const byStage = new Map<string | null, { count: number; value: number }>()

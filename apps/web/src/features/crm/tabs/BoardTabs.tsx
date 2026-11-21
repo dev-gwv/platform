@@ -29,6 +29,8 @@ import {
   useBulkPatch,
   useCreateStage,
   useLeadsSummary,
+  useLeadColumns,
+  useColumnMore,
   useCrmPrefs,
   useDeleteStage,
   useMoveStage,
@@ -45,17 +47,19 @@ import { BoardColumn, LeadCard } from './shared'
 import { DealCard } from '../DealCard'
 import { LeadBulkBar } from '../LeadBulkBar'
 import { capped } from '../board-cap'
+import { columnRows } from '../lead-pages'
 
 /** "Show 412 more" under a column that was cut short: bordered, so it reads as a button. */
-function ShowMore({ more, onShow }: { more: number; onShow: () => void }) {
+function ShowMore({ more, onShow, loading = false }: { more: number; onShow: () => void; loading?: boolean }) {
   if (more <= 0) return null
   return (
     <button
       type="button"
       onClick={onShow}
+      disabled={loading}
       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
     >
-      Show {more} more
+      {loading ? 'Loading…' : `Show ${more} more`}
     </button>
   )
 }
@@ -122,11 +126,19 @@ export function FollowUpBoardTab({
  * and required fields, and asks for a reason before a deal is lost.
  */
 export function PipelineTab({
-  leads,
+  leads: given,
   onOpen,
   serverCounts = false,
+  paged,
 }: {
   leads: readonly LeadRow[]
+  /**
+   * Read the board from the server a column page at a time (speed audit,
+   * 21 Nov): `filters` is the page's filter query string. Each stage shows
+   * its first 30 cards and its own total; Show more brings the next 30.
+   * Without it the board draws `leads` (a search's answer).
+   */
+  paged?: { filters: string } | undefined
   onOpen: (id: string) => void
   /**
    * Nothing narrows the board: the header and the column heads come from
@@ -138,7 +150,7 @@ export function PipelineTab({
   const inr = useINR()
   // One clock for the board, so a card cannot read "due today" while the one
   // beside it reads "overdue" because they asked at different moments.
-  const now = useMemo(() => new Date(), [leads])
+  const now = useMemo(() => new Date(), [given])
   const pipelines = usePipelines()
   const move = useMoveStage()
   const access = useAccess()
@@ -166,13 +178,26 @@ export function PipelineTab({
   const remembered = list.find((p) => p.id === prefs.data?.pipeline_id) ?? null
   const current = list.find((p) => p.id === pick) ?? remembered ?? list.find((p) => p.is_default) ?? list[0] ?? null
   const stages = useMemo(() => (current ? sortStages(current.stages) : []), [current])
+  const columns = useLeadColumns(paged?.filters ?? '', current?.id ?? null, !!paged)
+  const columnMore = useColumnMore(paged?.filters ?? '', current?.id ?? null)
+  const leads = useMemo(() => (paged ? columnRows(columns.data) : given), [paged, columns.data, given])
   const inPipeline = useMemo(
     () => leads.filter((l) => (current ? l.pipeline_id === current.id || (l.pipeline_id === null && current.is_default) : true)),
     [leads, current],
   )
   const browserTotal = useMemo(() => inPipeline.reduce((sum, l) => sum + (l.deal_value ?? 0), 0), [inPipeline])
-  const summary = useLeadsSummary(current?.id ?? null, serverCounts && !!current)
-  const counted = serverCounts ? summary.data : undefined
+  const summary = useLeadsSummary(current?.id ?? null, serverCounts && !paged && !!current)
+  const counted = paged
+    ? columns.data
+      ? {
+          open_total: columns.data.total,
+          open_value: columns.data.value,
+          stages: columns.data.columns.map((c) => ({ stage_id: c.stage_id, count: c.total, value: c.value })),
+        }
+      : undefined
+    : serverCounts
+      ? summary.data
+      : undefined
   const total = counted ? counted.open_value : browserTotal
   const dealCount = counted ? counted.open_total : inPipeline.length
   const expanded = useExpanded()
@@ -297,7 +322,8 @@ export function PipelineTab({
     attemptMove(lead, stage)
   }
 
-  if (pipelines.isLoading) return <SkeletonCards count={4} />
+  if (pipelines.isLoading || (paged && columns.isLoading)) return <SkeletonCards count={4} />
+  if (paged && columns.isError) return <ErrorState error={columns.error} onRetry={() => void columns.refetch()} />
   if (pipelines.isError || !current) {
     return <ErrorState error={pipelines.error ?? new Error('No pipeline yet.')} onRetry={() => void pipelines.refetch()} />
   }
@@ -360,7 +386,12 @@ export function PipelineTab({
             const stageCount = counted ? (head?.count ?? 0) : inStage.length
             const value = counted ? (head?.value ?? 0) : inStage.reduce((sum, l) => sum + (l.deal_value ?? 0), 0)
             const full = s.wip_limit !== null && stageCount >= s.wip_limit
-            const { shown, more } = capped(inStage, expanded.isOpen(s.id))
+            const column = paged ? columns.data?.columns.find((c) => c.stage_id === s.id) : undefined
+            const { shown, more } = paged
+              ? { shown: inStage, more: column?.next_cursor ? Math.max(0, column.total - inStage.length) : 0 }
+              : capped(inStage, expanded.isOpen(s.id))
+            const showMore = () =>
+              paged ? (column?.next_cursor ? void columnMore.more(s.id, column.next_cursor) : undefined) : expanded.expand(s.id)
             const tickedIn = inStage.filter((l) => ticked.has(l.id)).length
             return (
               <DroppableStage
@@ -403,7 +434,7 @@ export function PipelineTab({
                     onTick={canEdit ? stableTick : undefined}
                   />
                 ))}
-                <ShowMore more={more} onShow={() => expanded.expand(s.id)} />
+                <ShowMore more={more} loading={columnMore.loading === s.id} onShow={showMore} />
               </DroppableStage>
             )
           })}

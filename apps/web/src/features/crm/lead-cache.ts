@@ -94,6 +94,99 @@ export function patchLeadRows<T extends { id: string }>(rows: T[] | undefined, i
   return changed ? next : rows
 }
 
+type Paged = { items: { id: string }[] }
+type Columns = { columns: ({ stage_id: string | null; total: number; value?: number | undefined; next_cursor?: string | null | undefined } & Paged)[] }
+const isPaged = (d: unknown): d is Paged => !!d && typeof d === 'object' && Array.isArray((d as Paged).items)
+const isInfinite = (d: unknown): d is { pages: unknown[] } =>
+  !!d && typeof d === 'object' && Array.isArray((d as { pages?: unknown }).pages)
+const isColumns = (d: unknown): d is Columns => !!d && typeof d === 'object' && Array.isArray((d as Columns).columns)
+
+/**
+ * The board's columns with these leads changed. A new stage moves the card to
+ * the top of its new column at once, and both columns' counts and values
+ * follow, so a dropped card never waits for the server (paged board, 21 Nov).
+ */
+export function patchColumns<T extends Columns>(data: T, ids: ReadonlySet<string>, patch: object): T {
+  const stageId = (patch as { stage_id?: string | null }).stage_id
+  let changed = false
+  const moved: { id: string; deal_value?: number | null }[] = []
+  let columns = data.columns.map((c) => {
+    if (!c.items.some((r) => ids.has(r.id))) return c
+    changed = true
+    if (stageId === undefined || c.stage_id === stageId) {
+      return { ...c, items: c.items.map((r) => (ids.has(r.id) ? { ...r, ...patch } : r)) }
+    }
+    const leaving = c.items.filter((r) => ids.has(r.id))
+    moved.push(...leaving.map((r) => ({ ...r, ...patch })))
+    const lost = leaving.reduce((n, r) => n + ((r as { deal_value?: number | null }).deal_value ?? 0), 0)
+    return {
+      ...c,
+      items: c.items.filter((r) => !ids.has(r.id)),
+      total: Math.max(0, c.total - leaving.length),
+      ...(c.value !== undefined ? { value: c.value - lost } : {}),
+    }
+  })
+  if (moved.length && stageId !== undefined) {
+    const gained = moved.reduce((n, r) => n + (r.deal_value ?? 0), 0)
+    const target = columns.find((c) => c.stage_id === stageId)
+    if (target) {
+      columns = columns.map((c) =>
+        c === target
+          ? { ...c, items: [...moved, ...c.items], total: c.total + moved.length, ...(c.value !== undefined ? { value: c.value + gained } : {}) }
+          : c,
+      )
+    } else {
+      columns = [...columns, { stage_id: stageId, total: moved.length, value: gained, items: moved, next_cursor: null }]
+    }
+  }
+  return changed ? { ...data, columns } : data
+}
+
+/**
+ * Any cached shape of lead rows with these leads changed: a plain list, one
+ * page (`{items}`), the list's pages (`{pages}`) or the board (`{columns}`).
+ * The same object comes back when none of the leads is in it.
+ */
+export function patchLeadData(data: unknown, ids: ReadonlySet<string>, patch: object): unknown {
+  if (Array.isArray(data)) return patchLeadRows(data as { id: string }[], ids, patch)
+  if (isColumns(data)) return patchColumns(data, ids, patch)
+  if (isInfinite(data)) {
+    let changed = false
+    const pages = data.pages.map((pg) => {
+      const next = patchLeadData(pg, ids, patch)
+      if (next !== pg) changed = true
+      return next
+    })
+    return changed ? { ...data, pages } : data
+  }
+  if (isPaged(data)) {
+    const items = patchLeadRows(data.items, ids, patch)
+    return items === data.items ? data : { ...data, items }
+  }
+  return data
+}
+
+/** The first of these leads found in any cached shape. */
+export function findLead(data: unknown, ids: ReadonlySet<string>): CrmLead | null {
+  if (Array.isArray(data)) return (data as CrmLead[]).find((r) => ids.has(r.id)) ?? null
+  if (isColumns(data)) {
+    for (const c of data.columns) {
+      const hit = findLead(c.items, ids)
+      if (hit) return hit
+    }
+    return null
+  }
+  if (isInfinite(data)) {
+    for (const pg of data.pages) {
+      const hit = findLead(pg, ids)
+      if (hit) return hit
+    }
+    return null
+  }
+  if (isPaged(data)) return findLead(data.items, ids)
+  return null
+}
+
 /** One lead with the patch on it; undefined stays undefined. */
 export function patchLead<T extends { id: string }>(lead: T | undefined, patch: object): T | undefined {
   return lead && typeof lead === 'object' ? ({ ...lead, ...patch } as T) : lead
@@ -181,10 +274,10 @@ export async function applyLeadPatch(qc: QueryClient, ids: readonly string[], pa
   const lists: [QueryKey, unknown][] = []
   let before: CrmLead | null = null
   for (const queryKey of LIST_KEYS) {
-    for (const [key, data] of qc.getQueriesData<CrmLead[]>({ queryKey })) {
-      if (!Array.isArray(data)) continue
-      if (!before) before = data.find((r) => set.has(r.id)) ?? null
-      const next = patchLeadRows(data, set, patch)
+    for (const [key, data] of qc.getQueriesData<unknown>({ queryKey })) {
+      if (!data) continue
+      if (!before) before = findLead(data, set)
+      const next = patchLeadData(data, set, patch)
       if (next !== data) {
         lists.push([key, data])
         qc.setQueryData(key, next)
