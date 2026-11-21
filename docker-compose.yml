@@ -119,15 +119,23 @@ services:
       # it in the environment for this service alone, so a new commit id does
       # not recreate backup, migrate and the tickers on every deploy.
       APP_VERSION: ${APP_VERSION:-}
+    # No container_name and no host port, on purpose: the zero-downtime deploy
+    # (ZERO_DOWNTIME_DEPLOY=1, deploy/deploy.sh) runs a second api beside the
+    # old one for a minute, and either would stop it starting.
     expose:
       - "8787"
     healthcheck:
+      # /tmp/ipc-api-draining is the zero-downtime deploy's "leaving" mark: it
+      # makes this container report unhealthy, so Traefik stops sending it new
+      # requests while it still answers the ones it has, before it is stopped.
+      # Nothing else ever writes that file, so without it the check is exactly
+      # the /health probe it always was.
       test:
         [
           "CMD",
           "bun",
           "-e",
-          "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "require('fs').existsSync('/tmp/ipc-api-draining')?process.exit(1):fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
