@@ -158,7 +158,9 @@ function StepCard({ step, stages, canEdit }: { step: StepKey; stages: Deliverabl
               onChange={(e) => setLabel(e.target.value)}
               placeholder={step === 'in_progress' ? 'e.g. Colour grading' : step === 'review' ? 'e.g. With family' : 'Add a stage'}
               aria-label={`New stage in ${STEP_LABEL[step]}`}
-              className="h-8 min-w-0 flex-1"
+              // A phone gives the name its own line; the colours and Add wrap
+              // under it instead of squeezing it to two letters.
+              className="h-8 min-w-0 flex-1 max-sm:basis-full"
             />
             <ColourDots value={color} onChange={setColor} />
             <Button type="submit" size="sm" disabled={add.isPending || label.trim().length < 2}>
@@ -226,7 +228,7 @@ function StageRow({
         }}
         onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
         aria-label={`Name of ${s.label}`}
-        className={cn('h-8 min-w-0 flex-1 rounded-md bg-transparent px-2 text-sm font-semibold focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', t.text)}
+        className={cn('h-8 min-w-0 flex-1 basis-28 rounded-md bg-transparent px-2 max-sm:basis-[calc(100%-2.5rem)] text-sm font-semibold focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', t.text)}
       />
       <ColourDots value={tone} onChange={(c) => update.mutate({ id: s.id, color: c })} />
       <span title="Editors can move their own work to this stage">

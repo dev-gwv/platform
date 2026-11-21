@@ -290,7 +290,7 @@ export function SettingsFrame({ children }: { children: ReactNode }) {
       {/* On a phone the picker above already names the page (and the tab row
           the page within it), so the page's own heading stays for screen
           readers only: the name showed three times (audit, 21 Nov). */}
-      <div className="min-w-0 flex-1 max-md:[&_[data-page-title]]:sr-only">
+      <div className="min-w-0 flex-1 max-md:[&_[data-page-header]]:justify-start max-md:[&_[data-page-header]]:gap-x-0 max-md:[&_[data-page-title]]:sr-only">
         <SettingsTabs item={current} />
         {children}
       </div>

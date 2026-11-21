@@ -64,25 +64,22 @@ function ActivityContent() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Activity Log" />
+      {/* One heading, the rail's word; the area picker sits beside it
+          (it was "Activity Log" over "Recent Activity" and a line). */}
+      <PageHeader
+        title="Activity"
+        actions={
+          <Select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} aria-label="Which area" className="w-44">
+            {ENTITY_FILTERS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </Select>
+        }
+      />
 
       <Card>
         <CardContent className="p-4 sm:p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <h3 className="font-semibold tracking-tight">Recent Activity</h3>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Newest actions first. Filter by area to narrow the trail.
-              </p>
-            </div>
-            <Select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} className="w-44">
-              {ENTITY_FILTERS.map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="mt-4">
+          <div>
             {q.isLoading ? (
               <SkeletonList rows={6} columns={4} />
             ) : q.isError ? (

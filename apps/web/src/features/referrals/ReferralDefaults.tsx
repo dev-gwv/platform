@@ -72,7 +72,7 @@ export function ReferralDefaults({ canEdit }: { canEdit: boolean }) {
             <Sparkles className="size-4 text-primary" aria-hidden /> Referral cards for every client
           </p>
           <p className="text-sm text-muted-foreground">
-            Each booked client gets a card to forward, starting from these. Change one client’s own card under AI → Referral cards, or on their project.
+            Every booked client’s card starts from these.
           </p>
         </div>
 
