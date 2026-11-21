@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { absolutePortalUrl, expectedLine, moneyCard, openedAgo, trackerSteps } from './format'
+import { absolutePortalUrl, expectedLine, moneyCard, nextDueWhen, openedAgo, trackerSteps } from './format'
 
 describe('openedAgo', () => {
   const now = new Date('2026-09-25T12:00:00Z')
@@ -77,5 +77,19 @@ describe('moneyCard', () => {
   it('counts the invoices, GST and all, when they ask for more than the package balance', () => {
     const inv = { id: 'i', invoice_number: 'INV-1', invoice_date: '2026-10-31', due_date: '2026-11-14', status: 'partial', total: 336300, balance_due: 236300 }
     expect(moneyCard({ ...base, invoices: [inv] })).toEqual({ total: 336300, received: 100000, balance: 236300, withGst: true })
+  })
+})
+
+describe('nextDueWhen', () => {
+  const fmt = (d: string) => d.slice(5)
+  it('says "by" while the date is ahead or today', () => {
+    expect(nextDueWhen('2026-11-25', '2026-11-21', fmt)).toBe(' by 11-25')
+    expect(nextDueWhen('2026-11-21', '2026-11-21', fmt)).toBe(' by 11-21')
+  })
+  it('says "due since" once it has passed', () => {
+    expect(nextDueWhen('2026-11-14', '2026-11-21', fmt)).toBe(' · due since 11-14')
+  })
+  it('says nothing without a date', () => {
+    expect(nextDueWhen(null, '2026-11-21', fmt)).toBe('')
   })
 })

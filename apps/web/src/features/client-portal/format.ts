@@ -106,6 +106,12 @@ export function expectedLine(expected: string | null, today: string, fmt: (d: st
   return expected >= today ? `Expected by ${fmt(expected)}` : 'Coming soon'
 }
 
+/** " by 5 Nov" while the date is today or ahead; " · due since 5 Nov" once it has passed. */
+export function nextDueWhen(due: string | null, today: string, fmt: (d: string) => string): string {
+  if (!due) return ''
+  return due >= today ? ` by ${fmt(due)}` : ` · due since ${fmt(due)}`
+}
+
 /** A full link from what the API returned (it may be a bare `/p/<token>` path). */
 export function absolutePortalUrl(url: string, origin: string): string {
   return url.startsWith('/') ? `${origin.replace(/\/+$/, '')}${url}` : url

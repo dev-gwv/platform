@@ -37,7 +37,7 @@ import { foregroundForHex, presetFor } from '@/shared/theme/presets'
 import { InvoicePaper } from '@/features/billing/InvoicePaper'
 import { termsPayload } from '@/features/terms/document'
 import { TermsDocumentLetterhead, TermsDocumentSheet } from '@/features/terms/TermsDocumentSheet'
-import { DELIVERABLE_STATUS_LABEL, expectedLine, moneyCard, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
+import { DELIVERABLE_STATUS_LABEL, expectedLine, moneyCard, nextDueWhen, openedAgo, trackerSteps, type TrackerStep } from '@/features/client-portal/format'
 import { DeliverableTile } from '@/shared/ui/icon-tile'
 import { guestsLabel } from '@/features/shoots/guests'
 
@@ -553,7 +553,7 @@ function MoneySection({ money }: { money: NonNullable<PublicClientPortal['money'
           {money.next_due && card.balance > 0 && (
             <p className="text-sm">
               <span className="font-semibold">Next:</span> {formatINR(money.next_due.amount)}
-              {money.next_due.due_date ? ` by ${shortFmt.format(asDate(money.next_due.due_date))}` : ''}
+              {nextDueWhen(money.next_due.due_date, todayInIndia(), (d) => shortFmt.format(asDate(d)))}
             </p>
           )}
         </CardContent>
