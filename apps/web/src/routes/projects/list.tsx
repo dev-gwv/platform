@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { projectOutstanding } from '@ipc/domain'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { CalendarDays, Download, ExternalLink, FileText, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
@@ -45,7 +46,7 @@ const STATUS_TONE: Record<ProjectStatus, 'info' | 'success' | 'danger' | 'warnin
 }
 
 const shortDay = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-const due = (p: ProjectListItem) => Math.max(0, p.total_cost - p.received)
+const due = (p: ProjectListItem) => p.outstanding ?? projectOutstanding({ value: p.total_cost, received: p.received })
 
 export function ProjectsListPage() {
   return (

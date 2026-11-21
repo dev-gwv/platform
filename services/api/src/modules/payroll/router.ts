@@ -18,6 +18,9 @@ import { uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
+import { crewMonthDue } from '@ipc/domain'
+import { crewPayoutRows } from '../../lib/payout-rows'
+import { todayInIndia } from '../../lib/dates'
 
 /**
  * Monthly payroll run (0185): one screen to pay everyone this month.
@@ -96,6 +99,8 @@ export const payrollRouter = new Hono<AppEnv>()
     const parsed = monthQuery.safeParse({ year: c.req.query('year'), month: c.req.query('month') })
     if (!parsed.success) fail(422, 'Pick a month.')
     const { year, month } = parsed.data
+    const monthFrom = `${year}-${String(month).padStart(2, '0')}-01`
+    const monthTo = `${year}-${String(month).padStart(2, '0')}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}`
     const auth = c.get('auth')
     const seePayouts = auth.isOwner || auth.access.hasModule('team_payouts')
     const data = await attempt(c, 'payroll.month', () =>
@@ -113,23 +118,19 @@ export const payrollRouter = new Hono<AppEnv>()
                where l.run_id = ${run.id as string}
                order by u.name`
           : []
+        // The same lines and rule as Team payouts' Owed now (crewPayoutRows +
+        // summarizeCrewOwed), narrowed to the month's shoots: done shoots less
+        // what is paid; shoots still to come are kept apart (audit, 21 Nov).
         const freelancers = seePayouts
-          ? await sql`
-              with slots as (
-                select t.user_id, coalesce(t.final_cost, t.estimated_cost, 0) as cost,
-                       coalesce((select sum(st.amount_paid) from team_slot_settlements st where st.slot_id = t.id), 0) as paid
-                  from team_assignment_slots t
-                  left join shoots s on s.id = t.shoot_id
-                 where t.company_id = ${auth.companyId} and t.status not in ('cancelled', 'released')
-                   and coalesce(s.shoot_date, (t.start_at at time zone 'Asia/Kolkata')::date)
-                       between make_date(${year}, ${month}, 1) and (make_date(${year}, ${month}, 1) + interval '1 month - 1 day')::date
-              )
-              select s.user_id, coalesce(u.name, 'Team member') as name, count(*)::int as shoots,
-                     sum(s.cost) as owed, sum(s.paid) as paid, sum(s.cost - s.paid) as due
-                from slots s join users u on u.user_id = s.user_id
-               where s.cost - s.paid > 0
-               group by s.user_id, u.name
-               order by u.name`
+          ? crewMonthDue(await crewPayoutRows(sql, auth.companyId), monthFrom, monthTo, todayInIndia()).map((p) => ({
+              user_id: p.user_id,
+              name: p.user_name ?? 'Team member',
+              shoots: p.shoots,
+              owed: p.owed,
+              paid: p.paid,
+              due: p.due,
+              upcoming: p.upcoming,
+            }))
           : null
         return { run: run ?? null, lines, freelancers }
       }),

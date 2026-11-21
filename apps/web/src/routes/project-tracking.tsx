@@ -232,7 +232,7 @@ function ProjectRow({ project: p, open, onToggle }: { project: TrackedProject; o
   const pct = Math.round(p.health.completion * 100)
   const late = lateOf(p)
   const tab = NEXT_ACTION_TAB[p.health.next_action]
-  const due = p.total_cost !== null && p.received !== null ? Math.max(0, p.total_cost - p.received) : null
+  const due = p.outstanding ?? (p.total_cost !== null && p.received !== null ? Math.max(0, p.total_cost - p.received) : null)
 
   return (
     <Card>

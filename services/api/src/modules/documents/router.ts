@@ -314,7 +314,14 @@ export const publicDocumentsRouter = new Hono<AppEnv>()
   .get('/receipt/:token', async (c) => {
     const token = textParam(c, 'token', 400)
     const rows = await attempt(c, 'documents.public_receipt', () =>
-      withService(c.env, (sql) => sql`select * from get_receipt_for_token(p_raw => ${token})`),
+      withService(c.env, async (sql) => {
+        const found = await sql`select * from get_receipt_for_token(p_raw => ${token})`
+        if (!found[0]) return found
+        // What the project still owes, by the one rule (0315): GST paid on
+        // invoices is not counted against the value.
+        const [b] = await sql<{ balance: number | null }[]>`select receipt_balance_for_token(${token})::float8 as balance`
+        return [{ ...found[0], balance: b?.balance ?? null }]
+      }),
     )
     if (!rows) fail(503, 'The service is temporarily unavailable. Please try again in a moment.')
     if (!rows[0]) fail(404, 'This link is invalid or has expired.')

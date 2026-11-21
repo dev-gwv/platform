@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { CheckCircle2, Clock } from 'lucide-react'
-import { amountInWords } from '@ipc/domain'
+import { amountInWords, projectOutstanding } from '@ipc/domain'
 import type { PublicReceipt } from '@ipc/contracts'
 import { formatINR, humanize } from '@/shared/ui/format'
 import { shortDate } from './status'
@@ -26,7 +26,8 @@ export function ReceiptPaper({
   const isPaid = (receipt.status ?? 'paid') !== 'pending'
   const brandName = receipt.company_name ?? 'Studio'
   const contact = [receipt.company_phone, receipt.company_email, receipt.company_website].filter(Boolean).join('  ·  ')
-  const balance = Math.max(0, receipt.total_cost - receipt.received_total)
+  // The server sends the one rule (project_outstanding, 0315); an older one does not.
+  const balance = receipt.balance ?? projectOutstanding({ value: receipt.total_cost, received: receipt.received_total })
   const forWhat = receipt.project_name ?? (receipt.invoice_number ? `Invoice ${receipt.invoice_number}` : receipt.description ?? 'Payment received')
 
   return (

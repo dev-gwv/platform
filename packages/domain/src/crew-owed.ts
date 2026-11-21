@@ -81,3 +81,46 @@ export function summarizeCrewOwed(lines: readonly CrewPayoutLine[], today: strin
     people,
   }
 }
+
+export interface CrewMonthPerson {
+  user_id: string
+  user_name: string | null
+  /** The month's done shoots with money still left on them. */
+  shoots: number
+  /** What those shoots pay. */
+  owed: number
+  /** Paid toward them. */
+  paid: number
+  /** Still owed for them: the month's share of Owed now. */
+  due: number
+  /** What the month's shoots still to come will pay, less anything paid ahead. */
+  upcoming: number
+}
+
+/**
+ * Payroll's "Shoot payouts for <month>": the same lines and the same rule as
+ * Team payouts' Owed now (summarizeCrewOwed), narrowed to shoots in the month
+ * (`from`..`to`, YYYY-MM-DD). Shoots still to come are kept apart in
+ * `upcoming`, never added to what is owed.
+ */
+export function crewMonthDue(lines: readonly CrewPayoutLine[], from: string, to: string, today: string): CrewMonthPerson[] {
+  const byPerson = new Map<string, CrewMonthPerson>()
+  for (const l of lines) {
+    if (l.shoot_date < from || l.shoot_date > to) continue
+    const left = lineBalance(l)
+    if (left <= 0.001) continue
+    const p = byPerson.get(l.user_id) ?? { user_id: l.user_id, user_name: l.user_name, shoots: 0, owed: 0, paid: 0, due: 0, upcoming: 0 }
+    if (crewBucketOf(l.shoot_date, today) === 'past') {
+      p.shoots += 1
+      p.owed += l.amount
+      p.paid += l.paid
+      p.due += left
+    } else {
+      p.upcoming += left
+    }
+    byPerson.set(l.user_id, p)
+  }
+  return [...byPerson.values()]
+    .map((p) => ({ ...p, owed: roundINR(p.owed), paid: roundINR(p.paid), due: roundINR(p.due), upcoming: roundINR(p.upcoming) }))
+    .sort((a, b) => (a.user_name ?? '').localeCompare(b.user_name ?? ''))
+}

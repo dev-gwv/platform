@@ -217,6 +217,8 @@ export const publicReceipt = z.object({
   company_name: z.string().nullable(),
   total_cost: money,
   received_total: money,
+  /** Still to collect on the project, by the one rule (project_outstanding, 0315). */
+  balance: money.nullish(),
   // Lovable parity (all optional so old rows still parse).
   logo_url: z.string().nullable().nullish(),
   gstin: z.string().nullable().nullish(),
