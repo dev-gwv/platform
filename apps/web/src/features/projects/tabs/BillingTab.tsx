@@ -15,7 +15,7 @@ import { cn } from '@/shared/ui/cn'
 import { formatINR } from '@/shared/ui/format'
 import { useAccess } from '@/shared/auth/useAccess'
 import { useDeletePayment, useProjectBilling, useUpdatePayment, useUpdateQuotation } from '@/features/projects/api'
-import { useProfitAndLoss } from '@/features/financials/api'
+import { useProjectProfit } from '@/features/financials/api'
 import { issueReceiptLink, openReceiptWhatsApp, receiptShareText } from '@/features/billing/receiptShare'
 import { RecordPaymentDialog, type OpenInvoice } from '@/features/billing/RecordPaymentDialog'
 import { NewInvoiceDialog } from '@/features/billing/NewInvoiceDialog'
@@ -684,9 +684,9 @@ function PaymentItem({
 function ProfitCard({ project }: { project: ProjectDetail }) {
   const inr = useINR()
   const canSee = useAccess().hasModule('financials')
-  const { data } = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: project.id }, canSee)
+  const { data } = useProjectProfit(project.id, canSee)
   if (!canSee) return null
-  const f = data?.projects[0]
+  const f = data
   if (!f) return null
   return (
     <Card>

@@ -42,7 +42,7 @@ variable, so the frontend reports correctly without configuration today.
 |---|---|
 | `VITE_SENTRY_DSN` | overrides the in-source DSN |
 | `VITE_ENVIRONMENT` | defaults to `production` for a production build |
-| `VITE_SENTRY_REPLAY=0` | drops Session Replay from the bundle (~40 kB gzip) |
+| `VITE_SENTRY_REPLAY=1` | puts Session Replay in the bundle (~40 kB gzip; off by default since 21 Nov) |
 | `VITE_APP_VERSION` | overrides the commit the build reports |
 
 ## Sentry: alerting

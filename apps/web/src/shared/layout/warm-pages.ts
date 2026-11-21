@@ -26,6 +26,19 @@ export function menuTargets(entries: readonly NavEntry[]): string[] {
   return [...new Set(out.filter((t) => t.startsWith('/')))]
 }
 
+/**
+ * Pages opened from a list rather than the menu, with an id in the address,
+ * which `preloadRoute` cannot warm without one. The project page is the most
+ * opened page there is, and its tabs are in its own file; its quotation and
+ * editor are the next two clicks from it. The same imports as app/router.tsx,
+ * so they are the very files the router asks for.
+ */
+const WARM_MODULES: readonly (() => Promise<unknown>)[] = [
+  () => import('@/routes/projects/detail'),
+  () => import('@/routes/projects/$id.quotation'),
+  () => import('@/routes/projects/$id.edit'),
+]
+
 export function useWarmPages(entries: readonly NavEntry[], enabled: boolean) {
   const router = useRouter()
   const key = menuTargets(entries).join('|')
@@ -35,12 +48,19 @@ export function useWarmPages(entries: readonly NavEntry[], enabled: boolean) {
     const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
     if (conn?.saveData || conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') return
     const targets = key.split('|')
+    const projectsOpen = targets.includes('/projects')
+    const jobs: (() => void)[] = [
+      // First, the project page: the next click from Home or Projects more often
+      // than any menu line. Only for whoever has Projects in their menu; staff
+      // have their own project page.
+      ...(projectsOpen ? WARM_MODULES.map((load) => () => void load().catch(() => undefined)) : []),
+      ...targets.map((to) => () => void router.preloadRoute({ to } as never).catch(() => undefined)),
+    ]
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const step = (i: number) => {
-      if (cancelled || i >= targets.length) return
-      const to = targets[i]!
-      void router.preloadRoute({ to } as never).catch(() => undefined)
+      if (cancelled || i >= jobs.length) return
+      jobs[i]!()
       timer = setTimeout(() => step(i + 1), 300)
     }
     const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback

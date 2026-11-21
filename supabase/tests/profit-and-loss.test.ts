@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { PROJECT_LIFE, PROJECT_MARGIN_SQL } from '../../services/api/src/modules/financials/project-margin'
 
 /**
  * Profit & Loss (0167): every cost counted once, on a cash and a booked
@@ -129,6 +130,26 @@ describe('profit and loss', () => {
   it('one project over its whole life, for its Billing tab', async () => {
     const r = await pnl('2000-01-01', '2100-12-31', 'booked', PROJECT)
     expect(r.projects[0]).toMatchObject({ income: 100000, team: 15000, expenses: 1180, profit: 83820 })
+  })
+
+  it('the project page’s light margin read gives exactly the statement’s figure', async () => {
+    const whole = (await pnl(PROJECT_LIFE[0], PROJECT_LIFE[1], 'booked', PROJECT)).projects[0]
+    const light = (await db.query<{ r: unknown }>(PROJECT_MARGIN_SQL, [PROJECT, ...PROJECT_LIFE])).rows[0]!.r
+    expect(light).toEqual(whole)
+    // A cancelled project, and one with no dated shoot, follow the same rules.
+    await db.exec(`update shoots set shoot_date = null where project_id = '${PROJECT}'`)
+    const undated = (await pnl(PROJECT_LIFE[0], PROJECT_LIFE[1], 'booked', PROJECT)).projects[0]
+    expect((await db.query<{ r: unknown }>(PROJECT_MARGIN_SQL, [PROJECT, ...PROJECT_LIFE])).rows[0]!.r).toEqual(undated)
+    const before = (await db.query<{ status: string }>(`select status from projects where id = '${PROJECT}'`)).rows[0]!.status
+    await db.exec(`update projects set status = 'cancelled' where id = '${PROJECT}'`)
+    const cancelled = (await pnl(PROJECT_LIFE[0], PROJECT_LIFE[1], 'booked', PROJECT)).projects[0]
+    expect((await db.query<{ r: unknown }>(PROJECT_MARGIN_SQL, [PROJECT, ...PROJECT_LIFE])).rows[0]!.r).toEqual(cancelled)
+    // Put the fixture back for any test after this one.
+    await db.exec(`
+      update projects set status = '${before}' where id = '${PROJECT}';
+      update shoots set shoot_date = '2026-06-10' where id = '${JUNE_SHOOT}';
+      update shoots set shoot_date = '2026-07-15' where id = '${JULY_SHOOT}';
+    `)
   })
 
   it('refuses a backwards period', async () => {

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -41,6 +42,26 @@ export function useTeamTermsSends(shootId: string | null) {
     staleTime: 15_000,
   })
 }
+
+/**
+ * One shoot's sends, read from the whole project's: the project's Shoots tab
+ * draws a card per shoot, and each asking on its own was a request per day of
+ * the wedding. Every card shares this one query (the same key), and picks its
+ * shoot out of it.
+ */
+export function useProjectTeamTermsSends(projectId: string | null, shootId: string) {
+  const { session } = useAuth()
+  const pick = useCallback((rows: TeamTermsSendRow[]) => rows.filter((r) => r.shoot_id === shootId), [shootId])
+  return useQuery({
+    queryKey: ['team-terms', 'sends', 'project', projectId],
+    queryFn: () => callApi(`/team-terms/sends?project_id=${projectId}`, { responseSchema: sends }),
+    enabled: !!session && !!projectId,
+    staleTime: 15_000,
+    select: pick,
+  })
+}
+
+type TeamTermsSendRow = z.infer<typeof teamTermsSend>
 
 function useTermsMutation<TArgs, TResult>(
   fn: (args: TArgs) => Promise<TResult>,

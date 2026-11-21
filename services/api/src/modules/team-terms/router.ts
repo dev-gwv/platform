@@ -19,6 +19,7 @@ import { withService, withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { requireStudioWork } from '../../lib/scope'
+import { todayInIndia } from '../../lib/dates'
 import { resolveClientIp } from '../../lib/client-ip'
 import { sendTeamTermsEmail } from '../../lib/email'
 
@@ -293,7 +294,8 @@ export const teamTermsRouter = new Hono<AppEnv>()
       shoot_name: context.shoot_name,
       shoot_date: context.shoot_date,
       project_name: context.project_name,
-      agreement_date: new Date().toISOString().slice(0, 10),
+      // India's today: before 5:30 am IST the UTC date is still yesterday.
+      agreement_date: todayInIndia(),
     })
 
     const ttl = context.validity_days ? context.validity_days * 24 : DEFAULT_TTL_HOURS

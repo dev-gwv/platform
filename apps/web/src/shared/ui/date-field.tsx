@@ -1,8 +1,20 @@
-import { useRef, useState, type ComponentProps, type FocusEvent } from 'react'
+import { lazy, Suspense, useRef, useState, type ComponentProps, type FocusEvent } from 'react'
 import { CalendarDays, X } from 'lucide-react'
 import { cn } from './cn'
-import { Calendar } from './calendar'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
+
+/**
+ * The month grid (react-day-picker and its date library, ~60 kB) loads the
+ * first time a date box is pointed at, not with the app's shell: every form
+ * imports Input, and Input brought the calendar into the first download of
+ * every page (speed audit, 21 Nov). Hovering, focusing or touching the box
+ * starts the download, so by the time the popover opens it is usually there.
+ */
+const loadCalendar = () => import('./calendar')
+const Calendar = lazy(() => loadCalendar().then((m) => ({ default: m.Calendar })))
+const warmCalendar = () => {
+  void loadCalendar().catch(() => undefined)
+}
 
 /**
  * The date box, in the app's own clothes.
@@ -204,6 +216,8 @@ export function DateField({
             type="button"
             id={id}
             disabled={disabled}
+            onPointerEnter={warmCalendar}
+            onFocus={warmCalendar}
             aria-label={ariaLabel ?? (current ? `Date ${niceDate(current)}` : 'Pick a date')}
             aria-invalid={ariaInvalid}
             className={cn(
@@ -273,16 +287,20 @@ export function DateField({
               </button>
             ))}
           </div>
-          <Calendar
-            mode="single"
-            selected={selected}
-            defaultMonth={selected ?? (minD && minD > now ? minD : now)}
-            onSelect={(d) => d && commit(toIso(d))}
-            disabled={disabledDays}
-            startMonth={minD ?? new Date(now.getFullYear() - 80, 0)}
-            endMonth={maxD ?? new Date(now.getFullYear() + 10, 11)}
-            autoFocus
-          />
+          {/* The placeholder holds the month's size so the popover does not
+              jump when the grid lands. */}
+          <Suspense fallback={<div className="h-[18.5rem] w-[17.5rem]" aria-hidden />}>
+            <Calendar
+              mode="single"
+              selected={selected}
+              defaultMonth={selected ?? (minD && minD > now ? minD : now)}
+              onSelect={(d) => d && commit(toIso(d))}
+              disabled={disabledDays}
+              startMonth={minD ?? new Date(now.getFullYear() - 80, 0)}
+              endMonth={maxD ?? new Date(now.getFullYear() + 10, 11)}
+              autoFocus
+            />
+          </Suspense>
           <div className="mt-2 flex items-center border-t border-border pt-2">
             <button
               type="button"

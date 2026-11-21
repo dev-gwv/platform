@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from '@ipc/contracts'
-import { bookSlotsBatchResult, payoutMemory, teamSlot, teamMember, type BookSlotRequest, type SetSlotDataRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
+import { bookSlotsBatchResult, payoutMemory, teamSlot, teamMember, type TeamSlot, type BookSlotRequest, type SetSlotDataRequest, type SlotStatus, type SetSlotCostRequest, type UpdateSlotRequest } from '@ipc/contracts'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
@@ -11,17 +12,47 @@ const members = teamMember.array()
 /**
  * Bookings. With no range, everything (the assign dialogs need every booking
  * to see who is already out). With a range, just those days -- the booking
- * page asks for one month at a time.
+ * page asks for one month at a time. `project_id` / `shoot_id` narrow it to
+ * one project's or one shoot's bookings (the project page).
  */
-export function useSlots(range?: { from?: string; to?: string; user_id?: string }) {
+export function useSlots(
+  range?: { from?: string; to?: string; user_id?: string; project_id?: string; shoot_id?: string },
+  enabled = true,
+) {
   const { session } = useAuth()
   const qs = new URLSearchParams(Object.entries(range ?? {}).filter(([, v]) => !!v) as [string, string][]).toString()
   return useQuery({
     queryKey: ['allocation', qs || 'all'],
     queryFn: () => callApi(`/allocation${qs ? `?${qs}` : ''}`, { responseSchema: slots }),
-    enabled: !!session,
+    enabled: !!session && enabled,
     staleTime: 15_000,
   })
+}
+
+/** The first and last date among these shoots, or null when none is dated. Pure, tested. */
+export function datedSpan(shoots: readonly { shoot_date: string | null }[] | undefined): { from: string; to: string } | null {
+  const dates = (shoots ?? []).map((s) => s.shoot_date).filter((d): d is string => !!d).sort()
+  return dates.length ? { from: dates[0]!, to: dates[dates.length - 1]! } : null
+}
+
+/**
+ * Everyone's bookings on a project's shoot days, with the project's own: what
+ * a person's day (PersonDay) needs to say "also booked 7-9 PM elsewhere",
+ * without reading the studio's whole booking history.
+ */
+export function useSlotsOnDays(
+  shoots: readonly { shoot_date: string | null }[] | undefined,
+  own: readonly TeamSlot[] | undefined,
+): TeamSlot[] {
+  const span = datedSpan(shoots)
+  const around = useSlots(span ?? undefined, !!span)
+  const aroundData = span ? around.data : undefined
+  return useMemo(() => {
+    const byId = new Map<string, TeamSlot>()
+    for (const s of aroundData ?? []) byId.set(s.id, s)
+    for (const s of own ?? []) byId.set(s.id, s)
+    return [...byId.values()]
+  }, [aroundData, own])
 }
 
 /**

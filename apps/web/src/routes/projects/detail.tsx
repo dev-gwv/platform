@@ -31,7 +31,7 @@ import { Button } from '@/shared/ui/button'
 import { Select } from '@/shared/ui/input'
 import { humanize } from '@/shared/ui/format'
 import { cn } from '@/shared/ui/cn'
-import { useProfitAndLoss } from '@/features/financials/api'
+import { useProjectProfit } from '@/features/financials/api'
 import { collectedLine, marginOf, toCollectLine } from '@/features/projects/money-lines'
 import { RowMenu } from '@/shared/ui/row-menu'
 import { useDeleteProject, useProject, useUpdateProject } from '@/features/projects/api'
@@ -127,7 +127,7 @@ function ProjectDetail() {
   // the project is not enough (a Project Manager is "no money").
   const seesMoney = access.hasModule('billing') || access.hasModule('money')
   const seesProfit = seesMoney && access.hasModule('financials')
-  const pnl = useProfitAndLoss({ from: '2000-01-01', to: '2100-12-31', basis: 'booked', project_id: id }, seesProfit)
+  const profit = useProjectProfit(id, seesProfit)
   // Hand-ins waiting for a decision, counted on the "Work to review" chip.
   const handIns = useProjectWorkSubmissions(canReviewWork ? id : '')
   const waiting = (handIns.data ?? []).filter((s) => s.status === 'submitted').length
@@ -225,7 +225,7 @@ function ProjectDetail() {
   const balance = money.due
   // The same booked profit as the Finance tab's card and Billing > Profit &
   // Loss, so the page never shows two different margins.
-  const margin = seesProfit ? marginOf(pnl.data?.projects[0]) : null
+  const margin = seesProfit ? marginOf(profit.data) : null
   const StatusIcon = STATUS_ICON[data.status]
 
   async function onDelete() {

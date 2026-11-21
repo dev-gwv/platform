@@ -191,6 +191,22 @@ interface CallOptions<TOut extends z.ZodTypeAny> {
   timeoutMs?: number
 }
 
+/**
+ * Writes that can move a profit figure: money in (billing), expenses and
+ * overheads (financials), crew pay (allocation, team-payouts), salaries
+ * (payroll), and a project's price, status or shoot days (projects, shoots).
+ * Only these re-read the Profit & Loss and the project's margin; a task
+ * ticked or a note saved used to re-read them too (speed audit, 21 Nov).
+ */
+export const MONEY_WRITE = /^\/(billing|financials|allocation|team-payouts|payroll|projects|shoots)(\/|\?|$)/
+
+let moneyWritten: (() => void) | null = null
+
+/** main.tsx: what to do after a write that moved money (re-read the profit figures). */
+export function onMoneyWrite(fn: (() => void) | null) {
+  moneyWritten = fn
+}
+
 export async function callApi<TOut extends z.ZodTypeAny>(
   path: string,
   opts: CallOptions<TOut>,
@@ -276,6 +292,7 @@ export async function callApi<TOut extends z.ZodTypeAny>(
     throw new ApiError(res.status, msg, correlationId, json)
   }
 
+  if (method !== 'GET' && MONEY_WRITE.test(path)) moneyWritten?.()
   return opts.responseSchema.parse(json)
 }
 

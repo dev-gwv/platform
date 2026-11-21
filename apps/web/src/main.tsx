@@ -15,7 +15,7 @@ import * as Sentry from '@sentry/react'
 import { ThemeProvider } from '@/shared/theme/ThemeProvider'
 import { ConfirmProvider } from '@/shared/ui/confirm'
 import { router } from '@/app/router'
-import { ApiError } from '@/shared/api/client'
+import { ApiError, onMoneyWrite } from '@/shared/api/client'
 import { z } from '@ipc/contracts'
 import { registerPwa } from '@/shared/pwa/install'
 import { watchForNewRelease } from '@/shared/pwa/update'
@@ -33,12 +33,6 @@ function checkMessage(error: z.ZodError): string {
 const queryClient = new QueryClient({
   // Every failed mutation toasts its (UI-copy) error message — one place, all forms.
   mutationCache: new MutationCache({
-    // The margin is an ongoing one (owner, 5 Nov): any change -- a crew
-    // payout, an expense, a price, a payment -- re-reads the profit figures,
-    // so the project's Margin box moves the moment a cost is saved.
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['financials', 'pnl'] })
-    },
     onError: (error, _vars, _ctx, mutation) => {
       // Background saves (e.g. a draft autosave) opt out with meta.silent:
       // the owner did not press anything, so a toast would come from nowhere.
@@ -171,6 +165,14 @@ const TOASTER = {
     },
   },
 } satisfies ToasterProps
+
+// The margin is an ongoing one (owner, 5 Nov): a change that moves money -- a
+// crew payout, an expense, a price, a payment -- re-reads the profit figures,
+// so the project's Margin box moves the moment a cost is saved. Only those
+// writes (MONEY_WRITE in the API client), not every save in the app.
+onMoneyWrite(() => {
+  void queryClient.invalidateQueries({ queryKey: ['financials', 'pnl'] })
+})
 
 // What this device read last time is put back before the first page draws,
 // so a page opened before shows at once (owner, 12 Nov); then every new answer

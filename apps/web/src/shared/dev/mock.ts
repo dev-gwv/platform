@@ -534,7 +534,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
       status_counts: counts,
     }
   }
-  if (method === 'GET' && path === '/projects/tracking') return atStage(trackingRows, 'partial')
+  if (method === 'GET' && path.split('?')[0] === '/projects/tracking') return atStage(trackingRows, 'partial')
   if (method === 'GET' && path.startsWith('/projects/tracking/'))
     return { deliverables: [], tasks: [], submissions: [], shoots: [], money: null }
   // A deliverable's timeline: notes, voice notes and stage changes.
@@ -1250,6 +1250,10 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
       ],
     }
   if (method === 'GET' && path.startsWith('/financials/pnl')) return pnlFx(path)
+  if (method === 'GET' && /^\/financials\/project\/[^/]+\/margin/.test(path)) {
+    const id = path.split('/')[3] ?? ''
+    return pnlFx(`/financials/pnl?from=2000-01-01&to=2100-12-31&basis=booked&project_id=${id}`).projects[0] ?? null
+  }
   if (method === 'GET' && path.startsWith('/financials/profitability')) return profitabilityReportFx
   if (method === 'GET' && path.startsWith('/activity')) return activityLogFx
   if (method === 'POST' && path === '/activity') return { id: uid(0xea) }
@@ -4878,7 +4882,7 @@ function extraMock(path: string, q: URLSearchParams, method: string, body?: unkn
   if (method === 'GET' && path === '/work/reminder-settings') return { enabled: true, reminder_days: [3, 1, 0] }
 
   // ── projects ───────────────────────────────────────────────────────────
-  if (method === 'GET' && path === '/projects/tracking')
+  if (method === 'GET' && path.split('?')[0] === '/projects/tracking')
     return atStage(trackingRows, 'partial').map((r) => ({ ...r, health: HEALTH[r.id] ?? healthFx('healthy', 0, 'Add the first task') }))
   if (method === 'GET' && path === '/projects/templates')
     return {

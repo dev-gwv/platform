@@ -201,6 +201,8 @@ export const allocationRouter = new Hono<AppEnv>()
       from: c.req.query('from') || undefined,
       to: c.req.query('to') || undefined,
       user_id: c.req.query('user_id') || undefined,
+      project_id: c.req.query('project_id') || undefined,
+      shoot_id: c.req.query('shoot_id') || undefined,
     })
     if (!parsed.success) fail(422, 'Please check the dates.')
     const auth = c.get('auth')
@@ -208,13 +210,16 @@ export const allocationRouter = new Hono<AppEnv>()
     // Crew pay is money: a Project Manager plans the day without it (bug
     // sweep, 6 Nov); whoever pays the team or sees money keeps it.
     const seesPay = canPlan && (seesMoney(c) || auth.access.hasModule('team_payouts'))
-    const { from, to } = parsed.data
+    const { from, to, project_id: onlyProject, shoot_id: onlyShoot } = parsed.data
     const onlyUser = canPlan ? (parsed.data.user_id ?? null) : auth.userId
     const rows = await attempt(c, 'allocation.list', () =>
       withUser(
         c.env,
         auth.userId,
+        // Newest 5,000 when there are more, still sent oldest first: the cut
+        // used to fall on the newest bookings, the ones a screen needs.
         (sql) => sql`
+          select * from (
           select s.id, s.user_id, s.shoot_id, s.service_name, s.start_at, s.end_at, s.status,
                  ${seesPay ? sql`s.estimated_cost` : sql`null::numeric`} as estimated_cost,
                  ${seesPay ? sql`s.final_cost` : sql`null::numeric`} as final_cost,
@@ -237,8 +242,12 @@ export const allocationRouter = new Hono<AppEnv>()
             ${onlyUser ? sql`and s.user_id = ${onlyUser}` : sql``}
             ${from ? sql`and (s.end_at at time zone 'Asia/Kolkata')::date >= ${from}::date` : sql``}
             ${to ? sql`and (s.start_at at time zone 'Asia/Kolkata')::date <= ${to}::date` : sql``}
-          order by s.start_at
-          limit 5000`,
+            ${onlyProject ? sql`and sh.project_id = ${onlyProject}` : sql``}
+            ${onlyShoot ? sql`and s.shoot_id = ${onlyShoot}` : sql``}
+          order by s.start_at desc
+          limit 5000
+          ) newest
+          order by start_at`,
       ),
     )
     if (!rows) fail(400, 'We could not load the schedule.')
