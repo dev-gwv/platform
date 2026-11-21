@@ -53,10 +53,10 @@ export function TermsDocumentSheet({
               <table className={reading ? 'w-full text-[15px] [&_td]:py-2.5 [&_th]:py-2' : 'w-full text-xs'}>
                 <thead className="bg-muted/40 text-left">
                   <tr>
-                    <th className="px-2 py-1.5 font-medium">Label</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Value</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Estimated</th>
-                    <th className="px-2 py-1.5 font-medium">Due</th>
+                    <th className="px-2 py-1.5 font-medium">Payment</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Share</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Amount</th>
+                    <th className="px-2 py-1.5 font-medium">When</th>
                   </tr>
                 </thead>
                 <tbody>

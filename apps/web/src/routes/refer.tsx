@@ -135,7 +135,10 @@ export function ReferPage() {
               <p className="text-xs uppercase tracking-wider text-muted-foreground">
                 {campaign?.studio_name ?? "You've been referred"}
               </p>
-              <h1 className="truncate text-lg font-semibold">{campaign?.reward_title ?? campaign?.name ?? 'Refer a friend'}</h1>
+              {/* A project's campaign is named "<project> referrals" for the studio's own list; whoever opens it reads plain words. */}
+              <h1 className="text-lg font-semibold leading-snug">
+                {campaign?.reward_title ?? (fromCard ? 'A gift for you' : campaign && !/\sreferrals$/i.test(campaign.name) ? campaign.name : 'Refer a friend')}
+              </h1>
               {campaign?.referring_client_name && (
                 <p className="truncate text-xs text-muted-foreground">Shared by {campaign.referring_client_name}</p>
               )}
@@ -143,7 +146,10 @@ export function ReferPage() {
           </div>
 
           {loadError ? (
-            <p className="text-sm text-destructive">{loadError}</p>
+            <div className="flex flex-col items-center gap-1 py-6 text-center">
+              <p className="font-medium">This referral link does not open</p>
+              <p className="text-sm text-muted-foreground">{loadError} Please ask whoever shared it, or the studio, for a new link.</p>
+            </div>
           ) : !campaign ? (
             <Skeleton className="h-40" />
           ) : done ? (

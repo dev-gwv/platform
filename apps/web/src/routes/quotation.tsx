@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { publicQuotation, z, buildMailtoUrl, buildWhatsAppUrl, type PublicQuotation } from '@ipc/contracts'
-import { CheckCircle2, Printer, Mail, MessageCircle, Copy } from 'lucide-react'
+import { publicQuotation, z, buildWhatsAppUrl, type PublicQuotation } from '@ipc/contracts'
+import { CheckCircle2, Printer, MessageCircle, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { callApi, ApiError } from '@/shared/api/client'
 import { PageBackdrop } from '@/shared/brand/PageBackdrop'
@@ -20,7 +20,6 @@ import {
 } from '@/features/projects/QuotationDocument'
 
 const okResponse = z.object({ ok: z.boolean() })
-const emailResult = z.object({ status: z.string(), error: z.string().nullable(), url: z.string() })
 
 type Json = Record<string, unknown>
 const list = (v: unknown): Json[] => (Array.isArray(v) ? (v as Json[]) : [])
@@ -72,7 +71,7 @@ export function QuotationPage() {
 
   useEffect(() => {
     if (!token) {
-      setLoadError('This link is missing its token.')
+      setLoadError('Part of this link is missing. Open the whole link from your message, or ask the studio to send it again.')
       return
     }
     callApi(`/public/quotation/${token}`, { responseSchema: publicQuotation })
@@ -122,7 +121,9 @@ export function QuotationPage() {
   const received = Math.max(0, quote?.total_received ?? 0)
   const balance = Math.max(0, quote?.balance_due ?? total - received)
   const url = typeof window !== 'undefined' ? window.location.href : ''
-  const shareText = quote ? `Hi, here is your quotation for ${quote.snapshot.project_name} (${formatINR(total)}): ${url}` : url
+  const shareText = quote
+    ? `Our quotation${quote.company_name ? ` from ${quote.company_name}` : ''} for ${quote.snapshot.project_name} (${formatINR(total)}): ${url}`
+    : url
 
   async function copyLink() {
     try {
@@ -130,33 +131,6 @@ export function QuotationPage() {
       toast.success('Quotation link copied.')
     } catch {
       toast.error('Could not copy the link.')
-    }
-  }
-
-  /** Lovable parity: server send — emails the quotation from the studio. */
-  async function serverSend() {
-    const qid = quote?.quotation_id
-    if (!qid) {
-      toast.message('Email provider not configured — use Email app below.')
-      window.location.href = buildMailtoUrl(null, `Quotation — ${quote?.snapshot.project_name ?? ''}`, shareText)
-      return
-    }
-    setBusy(true)
-    try {
-      const r = await callApi(`/documents/quotations/${qid}/send-email`, {
-        method: 'POST',
-        body: {},
-        responseSchema: emailResult,
-      })
-      if (r.status === 'sent') toast.success('Quotation emailed successfully.')
-      else if (r.status === 'provider_missing') {
-        window.location.href = buildMailtoUrl(null, `Quotation — ${quote?.snapshot.project_name ?? ''}`, shareText)
-        toast.message('Email provider not configured — opened your email client.')
-      } else toast.error(r.error ?? 'Email failed to send.')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Email failed to send.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -204,7 +178,13 @@ export function QuotationPage() {
       <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-4 p-4">
         {loadError ? (
           <Card>
-            <CardContent className="p-4 text-center text-sm text-destructive">{loadError}</CardContent>
+            <CardContent className="flex flex-col items-center gap-1 p-6 text-center">
+              <p className="font-medium">This quotation link does not open</p>
+              <p className="text-sm text-muted-foreground">
+                {loadError}
+                {/ask (the studio|them)/i.test(loadError) ? '' : ' Please ask the studio to send it again.'}
+              </p>
+            </CardContent>
           </Card>
         ) : !quote || !doc ? (
           <Card>
@@ -218,35 +198,9 @@ export function QuotationPage() {
           <>
           <QuotationDocument data={doc} prefs={resolveQuotationPrefs(quote.display_prefs)} />
           <Card className="no-print">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex flex-wrap gap-2">
-                <DownloadDocumentButton
-                  name={`Quotation${quote.client_name ? ` ${quote.client_name}` : ''}`}
-                  label="Download PDF"
-                />
-                <Button variant="outline" size="sm" onClick={() => window.print()}>
-                  <Printer className="mr-1 size-4" /> Print
-                </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <a href={buildWhatsAppUrl(null, shareText)} target="_blank" rel="noreferrer noopener">
-                    <MessageCircle className="mr-1 size-4" /> WhatsApp
-                  </a>
-                </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <a href={buildMailtoUrl(null, `Quotation — ${formatINR(total)}`, shareText)}>
-                    <Mail className="mr-1 size-4" /> Email
-                  </a>
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void copyLink()}>
-                  <Copy className="mr-1 size-4" /> Copy link
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void serverSend()} disabled={busy}>
-                  Send via studio
-                </Button>
-              </div>
-
+            <CardContent className="flex flex-col gap-4 p-4 sm:p-6">
               {answered === 'accepted' ? (
-                <div className="mt-4 rounded-lg bg-success/10 p-3 text-sm">
+                <div className="rounded-lg bg-success/10 p-3 text-sm">
                   <p className="flex items-center gap-2 font-medium text-success">
                     <CheckCircle2 className="size-4 shrink-0" />
                     Accepted{name ? ` by ${name}` : ''} — the studio has been told.
@@ -258,30 +212,50 @@ export function QuotationPage() {
                   </p>
                 </div>
               ) : (
-                <div className="no-print mt-4 flex flex-col gap-3">
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-base font-semibold">Happy with this quotation?</h2>
                   {answered === 'declined' && (
                     <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
                       You declined this quotation. You can still accept it below if you change your mind.
                     </p>
                   )}
                   <div className="flex flex-col gap-1.5">
-                    <Label>Your name</Label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Rahul Sharma" />
+                    <Label htmlFor="quotation-name">Your name</Label>
+                    <Input id="quotation-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Rahul Sharma" autoComplete="name" />
                     <p className="text-xs text-muted-foreground">
                       Typing your name and accepting records your approval of the prices above.
                     </p>
                   </div>
                   {error && <p className="text-sm text-destructive">{error}</p>}
-                  <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => void respond(true)} disabled={busy || name.trim().length < 2}>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button size="lg" className="w-full sm:w-auto" onClick={() => void respond(true)} disabled={busy || name.trim().length < 2}>
                       Accept quotation
                     </Button>
-                    <Button variant="outline" onClick={() => void respond(false)} disabled={busy}>
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto" onClick={() => void respond(false)} disabled={busy}>
                       Not right now
                     </Button>
                   </div>
                 </div>
               )}
+
+              {/* Keeping or passing on a copy; the studio's own sending lives in the studio's app. */}
+              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+                <DownloadDocumentButton
+                  name={`Quotation${quote.client_name ? ` ${quote.client_name}` : ''}`}
+                  label="Download PDF"
+                />
+                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                  <Printer className="mr-1 size-4" /> Print
+                </Button>
+                <Button size="sm" variant="outline" asChild>
+                  <a href={buildWhatsAppUrl(null, shareText)} target="_blank" rel="noreferrer noopener">
+                    <MessageCircle className="mr-1 size-4" /> Share on WhatsApp
+                  </a>
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void copyLink()}>
+                  <Copy className="mr-1 size-4" /> Copy link
+                </Button>
+              </div>
             </CardContent>
           </Card>
           </>
