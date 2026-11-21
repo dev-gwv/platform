@@ -20,6 +20,7 @@ import {
   invitationPreview,
   authToken,
   sessionState,
+  type SessionState,
   completeSetupRequest,
   switchStudioRequest,
   studioMembership,
@@ -31,8 +32,8 @@ import {
   type PlanGate,
 } from '@ipc/contracts'
 import { serializeAccess, resolveAccess, type AppRole } from '@ipc/permissions'
-import type { AppEnv } from '../../context'
-import { requireAuth } from '../../middleware/auth'
+import type { AppEnv, AuthContext } from '../../context'
+import { authContextFor, requireAuth } from '../../middleware/auth'
 import { welcomeRoutes } from './routes-welcome'
 import { fail } from '../../middleware/errors'
 import { withService, withUser } from '../../lib/db'
@@ -140,6 +141,47 @@ async function setupStateOf(c: Context<AppEnv>, uid: string) {
     }),
   )
   return { setup_done: row?.done ?? true, setup_step: row?.done ? null : (row?.step ?? null) }
+}
+
+/**
+ * The whole session for the app. The three reads after the auth context do not
+ * depend on each other, so they run side by side (they used to run one after
+ * another: four transactions in a row on every new tab).
+ */
+async function sessionOf(c: Context<AppEnv>, a: AuthContext): Promise<SessionState> {
+  const [studios, emailVerified, setup] = await Promise.all([
+    // A failure here costs the switcher, not the session.
+    attempt(c, 'auth.session.studios', () => withService(c.env, (sql) => studiosOf(sql, a.userId))).then((r) => r ?? []),
+    // Only the studio owner is ever asked to confirm an email. A team
+    // member's email is a username the owner chose -- often a made-up one
+    // -- and nothing on the team side waits on a mailbox.
+    a.isOwner ? emailVerifiedOf(c, a.userId) : Promise.resolve(true),
+    setupStateOf(c, a.userId),
+  ])
+  return sessionState.parse({
+    user_id: a.userId,
+    company_id: a.companyId,
+    role: a.role,
+    is_owner: a.isOwner,
+    is_platform_admin: a.isPlatformAdmin,
+    display_name: a.displayName,
+    email: a.email,
+    plan_gate: a.planGate,
+    plan_expiry: a.planExpiry,
+    permissions: serializeAccess(a.access),
+    studios,
+    email_verified: emailVerified,
+    ...setup,
+  })
+}
+
+/** The session to ride on a refresh, or null when it cannot be built. Never throws. */
+async function sessionForRefresh(c: Context<AppEnv>, uid: string, pwv: number): Promise<SessionState | null> {
+  try {
+    return await sessionOf(c, await authContextFor(c, uid, pwv))
+  } catch {
+    return null
+  }
 }
 
 /** Every studio the caller's login can open, for the switcher. */
@@ -812,7 +854,17 @@ export const authRouter = new Hono<AppEnv>()
       fail(401, 'Your session has expired. Please sign in again.')
     }
 
-    return c.json(pair(c, await issueToken(c.env, rotated.uid, rotated.pwv), rotated.refresh))
+    const token = pair(c, await issueToken(c.env, rotated.uid, rotated.pwv), rotated.refresh)
+    // `?with=session`: a new tab or a reload gets the session in the same
+    // answer, so the app draws after one round trip instead of two. The token
+    // is already spent, so nothing here may fail the refresh: a session that
+    // cannot be built (no studio, a blip) is left out and the app asks
+    // /auth/session as before.
+    if (c.req.query('with') === 'session') {
+      const session = await sessionForRefresh(c, rotated.uid, rotated.pwv)
+      if (session) return c.json({ ...token, session })
+    }
+    return c.json(token)
   })
 
   .post('/logout', async (c) => {
@@ -867,33 +919,7 @@ export const authRouter = new Hono<AppEnv>()
   })
 
   // Whole-session hydration for an established tenant.
-  .get('/session', requireAuth, async (c) => {
-    const a = c.get('auth')
-    // A failure here costs the switcher, not the session.
-    const studios = (await attempt(c, 'auth.session.studios', () =>
-      withService(c.env, (sql) => studiosOf(sql, a.userId)),
-    )) ?? []
-    return c.json(
-      sessionState.parse({
-        user_id: a.userId,
-        company_id: a.companyId,
-        role: a.role,
-        is_owner: a.isOwner,
-        is_platform_admin: a.isPlatformAdmin,
-        display_name: a.displayName,
-        email: a.email,
-        plan_gate: a.planGate,
-        plan_expiry: a.planExpiry,
-        permissions: serializeAccess(a.access),
-        studios,
-        // Only the studio owner is ever asked to confirm an email. A team
-        // member's email is a username the owner chose -- often a made-up one
-        // -- and nothing on the team side waits on a mailbox.
-        email_verified: a.isOwner ? await emailVerifiedOf(c, a.userId) : true,
-        ...(await setupStateOf(c, a.userId)),
-      }),
-    )
-  })
+  .get('/session', requireAuth, async (c) => c.json(await sessionOf(c, c.get('auth'))))
 
   // One-time notes (0216): how often a note has been shown to this person and
   // whether they closed it -- kept on their row so it follows them across
