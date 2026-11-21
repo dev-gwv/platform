@@ -208,6 +208,7 @@ function SalesTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
             <Tile label="New projects" value={r.bookings} />
             <Tile label="Booking value" value={<Money value={r.booking_value} />} hint="Total of new projects" />
           </Tiles>
+          {r.bookings !== r.booked && <p className="-mt-2 text-sm text-muted-foreground">{salesGapLine(r)}</p>}
           <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Where enquiries came from" footer={canLeads ? <MoreLink to="/follow-ups">Open leads</MoreLink> : undefined}>
               {r.sources.length === 0 ? (
@@ -236,6 +237,20 @@ function SalesTab({ q, label, on }: { q: ReportQuery; label: string; on: boolean
       )}
     </TabBody>
   )
+}
+
+/**
+ * Why "Turned into bookings" and "New projects" differ. The first counts this
+ * period's enquiries that were booked through Leads; the second every project
+ * made in the period, however it started (0189). Two bare numbers that
+ * disagree read as a bug (audit, 21 Nov).
+ */
+function salesGapLine(r: SalesReport): string {
+  const projects = `${r.bookings} new project${r.bookings === 1 ? '' : 's'}`
+  if (r.bookings > r.booked) {
+    return `${projects}, ${r.booked} of them booked from this period's enquiries. A project made straight from Projects, or from an older enquiry, counts only as a new project.`
+  }
+  return `${r.booked} of this period's enquiries were booked, ${projects} made in it. An enquiry booked later counts here, and its project in the period it was made.`
 }
 
 // ── Money ─────────────────────────────────────────────────────────────

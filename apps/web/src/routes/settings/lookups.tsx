@@ -17,6 +17,18 @@ import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { TONES, TONE_BG, toneVar, type ToneName } from '@/shared/ui/tones'
 import { useCustomLookups, useCreateCustomLookup, useUpdateCustomLookup, useDeleteCustomLookup } from '@/features/settings/api'
+import { prettyWord } from '@/features/crm/fields'
+import { sourceLabel } from '@/features/reports/csv'
+
+/**
+ * A stored word in the words a studio uses: "google_form" reads "Google Form"
+ * and "csv_import" "Imported", the way Leads and Reports name them; a word the
+ * studio typed stays as typed.
+ */
+function wordLabel(category: string, value: string): string {
+  if (category.endsWith('_source') && /^[a-z0-9_]+$/.test(value)) return sourceLabel(value)
+  return prettyWord(value)
+}
 
 // Every list a studio can grow. Invoice lines and currencies were only on the
 // System tab's old "Custom Lookups" card; they live here now, with the rest.
@@ -198,17 +210,17 @@ function Lookups() {
                   <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: r.color ? toneVar(r.color as ToneName) : 'var(--muted)' }} aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium">{r.value}</p>
+                      <p className="truncate text-sm font-medium">{wordLabel(category, r.value)}</p>
                       {!r.is_active && <StatusBadge tone="neutral">Hidden</StatusBadge>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" aria-label={`Edit ${r.value}`} title="Edit" onClick={() => setForm({ id: r.id, label: r.value, color: (TONES as readonly string[]).includes(r.color ?? '') ? (r.color as ToneName) : null, sort: r.sort_order, active: r.is_active })}>
+                  <Button variant="ghost" size="sm" aria-label={`Edit ${wordLabel(category, r.value)}`} title="Edit" onClick={() => setForm({ id: r.id, label: r.value, color: (TONES as readonly string[]).includes(r.color ?? '') ? (r.color as ToneName) : null, sort: r.sort_order, active: r.is_active })}>
                     <Pencil />
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => toggleActive(r.id, r.is_active, r.value)} title={r.is_active ? 'Hide it from new pickers; old records keep it' : 'Show it in pickers again'}>
                     {r.is_active ? 'Hide' : 'Show'}
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${r.value}`} title="Delete" onClick={() => void hardDelete(r.id, r.value)}>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${wordLabel(category, r.value)}`} title="Delete" onClick={() => void hardDelete(r.id, wordLabel(category, r.value))}>
                     <Trash2 />
                   </Button>
                 </li>
