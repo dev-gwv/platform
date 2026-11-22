@@ -219,11 +219,11 @@ export function ReferPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
                     <Label>Your name</Label>
-                    <Input value={referrerName} onChange={(e) => setReferrerName(e.target.value)} placeholder="Optional" />
+                    <Input className="h-[44px]" value={referrerName} onChange={(e) => setReferrerName(e.target.value)} placeholder="Optional" />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Your phone</Label>
-                    <Input value={referrerPhone} onChange={(e) => setReferrerPhone(e.target.value)} placeholder="Optional" />
+                    <Input className="h-[44px]" type="tel" inputMode="tel" autoComplete="tel" value={referrerPhone} onChange={(e) => setReferrerPhone(e.target.value)} placeholder="Optional" />
                   </div>
                 </div>
               )}
@@ -232,7 +232,7 @@ export function ReferPage() {
                 <Label>
                   {fromCard ? 'Your name' : "Your friend's name"} <span className="text-destructive">*</span>
                 </Label>
-                <Input value={clientName} onChange={(e) => setClientName(e.target.value)} required />
+                <Input className="h-[44px]" value={clientName} onChange={(e) => setClientName(e.target.value)} required />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -240,28 +240,29 @@ export function ReferPage() {
                   <Label>
                     {fromCard ? 'Your phone' : 'Their phone'} <span className="text-destructive">*</span>
                   </Label>
-                  <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="98765 43210" required />
+                  <Input className="h-[44px]" type="tel" inputMode="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="98765 43210" required />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>{fromCard ? 'Your email' : 'Their email'}</Label>
-                  <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Optional" />
+                  <Input className="h-[44px]" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Optional" />
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>What's the event?</Label>
-                  <Input value={eventType} onChange={(e) => setEventType(e.target.value)} placeholder="Wedding, pre-wedding…" />
+                  <Input className="h-[44px]" value={eventType} onChange={(e) => setEventType(e.target.value)} placeholder="Wedding, pre-wedding…" />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Event date</Label>
-                  <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+                  <Input className="h-[44px]" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label>How many functions?</Label>
                 <Input
+                  className="h-[44px]"
                   type="number"
                   min={0}
                   max={50}
@@ -287,7 +288,7 @@ export function ReferPage() {
                   {error}
                 </p>
               )}
-              <Button type="submit" disabled={busy}>
+              <Button type="submit" disabled={busy} className="h-[44px]">
                 {busy ? 'Sending…' : 'Send referral'}
               </Button>
               <div className="flex justify-center">
@@ -352,7 +353,7 @@ export function EndedReferral({ slug, studio }: { slug: string; studio: PublicRe
               <MessageCircle className="size-5" />
             </span>
           )}
-          <h1 className="min-w-0 truncate text-lg font-semibold leading-snug">{studio.studio_name}</h1>
+          <h1 className="min-w-0 break-words text-lg font-semibold leading-snug">{studio.studio_name}</h1>
         </div>
         {done ? (
           <div className="flex flex-col items-center gap-2 py-4 text-center">
@@ -368,13 +369,13 @@ export function EndedReferral({ slug, studio }: { slug: string; studio: PublicRe
                 <Label htmlFor="ended-name">
                   Your name <span className="text-destructive">*</span>
                 </Label>
-                <Input id="ended-name" value={name} onChange={(e) => setName(e.target.value)} required />
+                <Input className="h-[44px]" id="ended-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ended-phone">
                   Your phone <span className="text-destructive">*</span>
                 </Label>
-                <Input id="ended-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" required />
+                <Input className="h-[44px]" id="ended-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" required />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -393,7 +394,8 @@ export function EndedReferral({ slug, studio }: { slug: string; studio: PublicRe
                 {error}
               </p>
             )}
-            <Button type="submit" disabled={busy}>
+            {/* A long studio name wraps onto a second line instead of running off the button. */}
+            <Button type="submit" disabled={busy} className="h-auto min-h-[44px] whitespace-normal py-2 text-center">
               {busy ? 'Sending…' : `Send to ${studio.studio_name}`}
             </Button>
           </form>

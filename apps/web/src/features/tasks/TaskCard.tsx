@@ -130,7 +130,7 @@ export function TaskCard({
             }}
             onPointerDown={stop}
             className={cn(
-              'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+              'relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-[13px]',
               select.ticked ? 'border-primary bg-primary text-primary-foreground' : 'border-input hover:border-primary/50',
             )}
           >
@@ -236,7 +236,7 @@ function QuickButton({ action, onClick }: { action: QuickAction; onClick: () => 
       }}
       onPointerDown={stop}
       className={cn(
-        'inline-flex h-7 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 text-[11px] font-medium transition-colors',
+        'inline-flex h-[40px] flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 text-xs font-medium transition-colors md:h-7 md:text-[11px]',
         action === 'submit'
           ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
           : action === 'done'

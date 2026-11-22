@@ -41,6 +41,25 @@ function boardParams(b: BoardQuery): URLSearchParams {
   return p
 }
 
+/**
+ * A search, a person, a due date or a project is on: the board shows only
+ * some of each lane's cards, so a drag saves them among their own places and
+ * every hidden card keeps its own (POST /tasks/board/order `keep_hidden`).
+ */
+export function boardNarrowed(b: BoardQuery): boolean {
+  return b.mine || !!b.member || (!!b.due && b.due !== 'all') || !!b.q.trim() || !!b.project
+}
+
+/**
+ * The order a drag saves for one lane: the cards shown, and how the server
+ * fits in the rest -- among them when the board is filtered, after them when
+ * the lane only holds more than it has loaded.
+ */
+export function laneOrderBody(b: BoardQuery, lane: TaskStatus, ids: string[], hasMore: boolean) {
+  const rest = boardNarrowed(b) ? { keep_hidden: true } : hasMore ? { rest_after: true } : {}
+  return { board_view: 'default', lane_key: lane, task_ids: ids, ...rest }
+}
+
 /** `/tasks/columns?…`: only what narrows is sent, so equal toolbars share a cache entry. */
 export function taskColumnsPath(b: BoardQuery): string {
   return `/tasks/columns?${boardParams(b).toString()}`
@@ -67,7 +86,11 @@ export function appendToColumn(data: TaskColumns, status: TaskStatus, page: Task
   }
 }
 
-/** How many more a column holds than it shows: the N in "Show N more". */
+/**
+ * How many more a column holds than it shows: the N in "Show N more" --
+ * everything left, as the Leads pipeline says it; each press still brings
+ * the next 30 (TASK_COLUMN_PAGE).
+ */
 export function moreInColumn(c: TaskColumns['columns'][number] | undefined): number {
   if (!c?.next_cursor) return 0
   return Math.max(0, c.total - c.items.length)
@@ -128,4 +151,9 @@ export function laneOf(
     more: moreInColumn(c),
     cursor: c?.next_cursor ?? null,
   }
+}
+
+/** The words on a column's Show more button. */
+export function showMoreLabel(more: number, loading = false): string {
+  return loading ? 'Loading…' : `Show ${more.toLocaleString('en-IN')} more`
 }
