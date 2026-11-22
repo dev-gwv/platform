@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Facebook, Link2, Plug, PowerOff, Unplug } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import type { FbPage } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
@@ -47,6 +48,7 @@ export function MetaConnectionCard() {
   const exchange = useExchangeMetaCode()
   const reset = useResetMeta()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const confirm = useConfirm()
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
@@ -72,7 +74,9 @@ export function MetaConnectionCard() {
     url.searchParams.delete('error')
     url.searchParams.delete('error_reason')
     url.searchParams.delete('error_description')
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    // Through the router, so its own idea of the address moves too (CLAUDE.md:
+    // page state in the address follows the router).
+    void navigate({ href: `${url.pathname}${url.search}${url.hash}`, replace: true })
     if (!code) return
     // A code this tab did not ask for (someone else's link) is never traded.
     if (!oauthStateMatches(returnedState, keptState)) {
@@ -86,7 +90,7 @@ export function MetaConnectionCard() {
       .mutateAsync(code)
       .catch(() => undefined)
       .finally(() => setExchanging(false))
-  }, [])
+  }, [navigate])
 
   const oauthReady = !!connectUrl.data?.connect_url
   const ready = status.data?.ready ?? true

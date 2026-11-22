@@ -1,5 +1,34 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { nextSearch, readParam } from './use-url-param'
+
+/**
+ * CLAUDE.md "Page state in the address follows the router": useUrlParam reads
+ * useRouterState and writes with navigate({ to: '.', replace: true }); never
+ * window.history.replaceState (or pushState), which the router never hears of,
+ * so a later link to the same page with another ?tab= could not move it.
+ */
+describe('the address', () => {
+  it('is only ever changed through the router', () => {
+    const root = resolve(import.meta.dirname, '..', '..')
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((f) => {
+        const p = join(dir, f)
+        return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) ? [p] : []
+      })
+    const bad = walk(root).flatMap((p) => {
+      const rel = relative(root, p).split(sep).join('/')
+      return readFileSync(p, 'utf8')
+        .split('\n')
+        .flatMap((l, i) => (/\bhistory\.(replaceState|pushState)\s*\(/.test(l) ? [`apps/web/src/${rel}:${i + 1}: ${l.trim()}`] : []))
+    })
+    expect(
+      bad,
+      `CLAUDE.md "Page state in the address follows the router" -- use useUrlParam, or useNavigate()'s navigate({ to: '.', search, replace: true }) / navigate({ href, replace: true }):\n${bad.join('\n')}`,
+    ).toEqual([])
+  })
+})
 
 describe('readParam', () => {
   it('reads the raw string, whatever the router parsed', () => {

@@ -70,6 +70,19 @@ describe('the settings rail', () => {
     for (const p of pages) expect(router).toContain(`'${p}'`)
   })
 
+  it('reaches every /settings/ page the router has, from one line of the rail', () => {
+    // CLAUDE.md "Settings is a grouped rail": every settings page is listed once in
+    // SETTINGS_GROUPS. A new /settings/ route that no line names (as its `to`, a tab or
+    // `also`) is a page nobody can find, and the rail lights nothing on it.
+    const bad: string[] = []
+    router.split('\n').forEach((l, i) => {
+      const m = l.match(/(?:\broute\(|path: )'(\/settings\/[^']+)'/)
+      if (!m || /<Navigate\b/.test(l)) return // a redirect to another page is not a page
+      if (!settingsItemFor(m[1]!)) bad.push(`app/router.tsx:${i + 1}: ${m[1]} is in no SETTINGS_GROUPS line (to, tabs or also)`)
+    })
+    expect(bad, `CLAUDE.md "Settings is a grouped rail" -- add the page to a line in features/settings/SettingsNav.tsx:\n${bad.join('\n')}`).toEqual([])
+  })
+
   it('knows which page an address belongs to, including the focused System views', () => {
     expect(settingsItemFor('/settings/roles')?.label).toBe('Roles & access')
     expect(settingsItemFor('/settings/work-submissions')?.to).toBe('/settings/lookups')

@@ -14,6 +14,7 @@ import { SkeletonList } from '@/shared/ui/skeleton'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { DraftRestoredBanner, useFormDraft } from '@/shared/hooks/use-form-draft'
 import {
   useAddHoliday,
@@ -66,8 +67,6 @@ const span = (l: Pick<LeaveRequest, 'start_date' | 'end_date' | 'half_day'>) =>
 /** Clock times in India time, whatever the device is set to -- the studio's day. */
 const time = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '—'
-/** Today where the studio is (India). */
-const todayIST = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
 
 /**
  * Days off, all in one place: ask for leave, fix a day you forgot to check in,
@@ -118,7 +117,7 @@ function MyLeave() {
   const [asking, setAsking] = useState(false)
   const [changing, setChanging] = useState<LeaveRequest | null>(null)
   const [fixing, setFixing] = useState(false)
-  const today = todayIST()
+  const today = todayInIndia()
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -248,7 +247,7 @@ function AskLeaveDialog({ onClose, editing = null }: { onClose: () => void; edit
   const ask = useAskLeave()
   const change = useUpdateLeave()
   const balances = useLeaveBalances(session?.user_id ?? null)
-  const today = todayIST()
+  const today = todayInIndia()
   const [kind, setKind] = useState<LeaveKind>(editing?.kind ?? 'casual')
   const [from, setFrom] = useState(editing?.start_date ?? today)
   const [to, setTo] = useState(editing?.end_date ?? today)
@@ -337,7 +336,7 @@ function AskLeaveDialog({ onClose, editing = null }: { onClose: () => void; edit
 
 function FixDayDialog({ onClose }: { onClose: () => void }) {
   const ask = useAskCorrection()
-  const [date, setDate] = useState(todayIST())
+  const [date, setDate] = useState(todayInIndia())
   const [inAt, setInAt] = useState('10:00')
   const [outAt, setOutAt] = useState('19:00')
   const [reason, setReason] = useState('')
@@ -357,7 +356,7 @@ function FixDayDialog({ onClose }: { onClose: () => void }) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fx-date">Day</Label>
-            <Input id="fx-date" type="date" value={date} max={todayIST()} onChange={(e) => setDate(e.target.value)} />
+            <Input id="fx-date" type="date" value={date} max={todayInIndia()} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fx-in">Came in</Label>
