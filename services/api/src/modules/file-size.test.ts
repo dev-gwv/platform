@@ -17,9 +17,6 @@ const LIMIT = 600
 const OVER: Record<string, number> = {
   // Pipelines, stages and custom fields in one Hono chain (22 Nov 2026).
   'crm/objects.ts': 676,
-  // Being split into routes-*.ts by another session (22 Nov 2026); headroom so
-  // that work in flight does not trip this either way. Drop it once it lands.
-  'tasks/router.ts': 900,
 }
 
 describe('API route modules', () => {
