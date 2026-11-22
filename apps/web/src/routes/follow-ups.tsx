@@ -9,7 +9,7 @@ import { Input } from '@/shared/ui/input'
 import { Segmented } from '@/shared/ui/segmented'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState } from '@/shared/ui/states'
-import { SEARCH_MIN, useLeadCards, useLeadCounts, useLeadPages, useLeadSearch, useSavedViews } from '@/features/crm/api'
+import { SEARCH_MIN, useLateFollowUps, useLeadCards, useLeadCounts, useLeadPages, useLeadSearch, useSavedViews } from '@/features/crm/api'
 import { leadFilterParams, localDayStart, pageRows } from '@/features/crm/lead-pages'
 import { ShowMoreLeads } from '@/features/crm/ShowMoreLeads'
 import { AddLeadDialog } from '@/features/crm/AddLeadDialog'
@@ -23,8 +23,7 @@ import { FollowUpBoardTab, PipelineTab } from '@/features/crm/tabs/BoardTabs'
 import { BoardFilters } from '@/features/crm/BoardFilters'
 import { CsvImport } from '@/features/crm/tabs/ImportsTab'
 import { DownloadButtons } from '@/features/enquiry-forms/parts'
-import { boardScopeFor, useBoardFollowUps } from '@/features/crm/FollowUpOnRow'
-import { followUpBucket } from '@/features/crm/follow-ups'
+import { boardScopeFor } from '@/features/crm/FollowUpOnRow'
 import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { RowMenu, type RowMenuItem } from '@/shared/ui/row-menu'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -309,10 +308,14 @@ function Crm() {
         *
         * Sticky, because on a board that scrolls sideways and a list four
         * hundred rows long, the controls scrolling away means scrolling back up
-        * to change anything.
+        * to change anything. Not on a phone (phone check, 22 Nov): there it
+        * wraps to four rows and held a third of the screen over the leads.
+        *
+        * The strip above it covers the scroll box's padding, where cards
+        * scrolled under it used to peek out between it and the top bar.
         */}
       <LeadLimitLine />
-      <div className="sticky top-0 z-20 -mx-1 mt-2 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1">
+      <div className="-mx-1 mt-3 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1 sm:sticky sm:top-0 sm:z-20 sm:before:absolute sm:before:inset-x-0 sm:before:bottom-full sm:before:h-3 sm:before:bg-background md:mt-4 md:before:h-4">
         <Segmented
           label="How to show these leads"
           value={mode}
@@ -659,11 +662,9 @@ function MoreLeadTools({ count }: { count: number }) {
  */
 function FollowUpsButton() {
   const { session } = useAuth()
-  // The same list, in the same scope, as the board this opens -- so "5 late"
-  // here is the board's Overdue column.
-  const list = useBoardFollowUps(boardScopeFor(session?.role))
-  const now = useMemo(() => new Date(), [list.dataUpdatedAt])
-  const late = (list.data ?? []).filter((t) => t.due_at && followUpBucket(t.due_at, now) === 'overdue').length
+  // The board's Overdue column, in the board's scope, counted on the server
+  // (the board itself is 1,000 follow-ups; this is one number).
+  const late = useLateFollowUps(boardScopeFor(session?.role)).data?.late ?? 0
   return (
     <Link to="/follow-ups/board" className="inline-flex items-center gap-1.5 px-3 text-sm font-medium hover:bg-muted">
       <AlarmClock className="size-4" aria-hidden /> Follow-ups

@@ -178,3 +178,41 @@ export function placeRestAfter(sql: TransactionSql, company: string, view: strin
     on conflict (company_id, board_view, task_id)
       do update set lane_key = excluded.lane_key, sort_order = excluded.sort_order` as unknown as Frag
 }
+
+/**
+ * Every card of one lane in the board's order (hand order, then newest
+ * first), as placeRestAfter reads it: what a filtered drag is fitted into.
+ */
+export function selectLaneOrder(sql: TransactionSql, view: string, lane: string): Frag {
+  return sql`
+    select t.id
+      from tasks t
+      left join production_board_card_order o on o.task_id = t.id and o.board_view = ${view}
+     where t.status::text = ${lane}
+       and (t.status::text <> 'completed' or t.updated_at >= now() - interval '45 days')
+     order by coalesce(o.sort_order, 0), t.created_at desc, t.id desc` as unknown as Frag
+}
+
+/**
+ * A drag on a filtered board (a search or a person picked) knows only the
+ * cards it shows. Those cards take each other's places in their new order;
+ * every card the filter hides, or that is not loaded yet, keeps its own
+ * place. A card sent that the lane did not hold goes at the end.
+ */
+export function fillSlots(lane: readonly string[], shown: readonly string[]): string[] {
+  const sent = new Set(shown)
+  const queue = shown.filter((id, i) => shown.indexOf(id) === i && lane.includes(id))
+  let next = 0
+  const out = lane.map((id) => (sent.has(id) ? queue[next++]! : id))
+  return [...out, ...shown.filter((id, i) => shown.indexOf(id) === i && !lane.includes(id))]
+}
+
+/** A whole lane written as 0..n-1 in this order. */
+export function writeLaneOrder(sql: TransactionSql, company: string, view: string, lane: string, ids: readonly string[]): Frag {
+  return sql`
+    insert into production_board_card_order (company_id, board_view, lane_key, task_id, sort_order)
+    select ${company}, ${view}, ${lane}, x.id, (x.n - 1)::int
+      from unnest(${ids as string[]}::uuid[]) with ordinality as x(id, n)
+    on conflict (company_id, board_view, task_id)
+      do update set lane_key = excluded.lane_key, sort_order = excluded.sort_order` as unknown as Frag
+}

@@ -3188,6 +3188,22 @@ if (listed) {
     { made: made.status, current: on.json.current },
   )
 
+  // The Leads header's "N late" is the board's Overdue column, counted on the
+  // server (speed check, 22 Nov); another studio's count never includes ours.
+  const lateBefore = (await api('/crm/activities/late', { token: aToken })).json.late
+  const bBefore = (await api('/crm/activities/late', { token: reset.json.access_token })).json.late
+  await api('/crm/activities', { token: aToken, method: 'POST', body: { lead_id: leadId, type: 'task', subject: 'Call back', due_at: new Date(Date.now() - 3600e3).toISOString() } })
+  const lateAfter = await api('/crm/activities/late', { token: aToken })
+  const board = await api('/crm/activities?open_tasks=1&live=1&limit=1000', { token: aToken })
+  const bLate = await api('/crm/activities/late', { token: reset.json.access_token })
+  check(
+    'follow-ups: the late count rises with a follow-up past its time, equals the board’s overdue rows, and is per studio',
+    lateAfter.status === 200 && lateAfter.json.late === lateBefore + 1 &&
+      lateAfter.json.late === (board.json ?? []).filter((t) => t.due_at && new Date(t.due_at).getTime() < Date.now()).length &&
+      bLate.status === 200 && bLate.json.late === bBefore,
+    { before: lateBefore, after: lateAfter.json, b: bLate.json, bBefore },
+  )
+
   await api('/crm/activities', { token: aToken, method: 'POST', body: { lead_id: leadId, type: 'whatsapp', direction: 'in', body: 'Yes please' } })
   const replied = await api(`/crm/leads/${leadId}/sequence`, { token: aToken })
   check('sequences: a reply stops it', replied.json.current?.stopped_reason === 'replied', replied.json.current)
@@ -3967,14 +3983,28 @@ if (listed) {
     { theirs: theirs.json && { owed_now: theirs.json.owed_now, upcoming: theirs.json.upcoming, paid: theirs.json.paid, ahead: theirs.json.paid_ahead, n: theirs.json.rows?.length }, owed: owed.status, person, all: all.json?.owed_now, dash: owed.json?.owed_now },
   )
 
+  // Team payouts a page at a time (speed check, 22 Nov): the same headline and
+  // rows as the full read, the view and the person filter applied on the server.
+  const pgOwed = await api(`/team-payouts/shoots/page?view=owed&q=${encodeURIComponent('')}`, { token: aToken })
+  const pgAll = await api('/team-payouts/shoots/page?view=all&limit=1', { token: aToken })
+  check(
+    'crew money pages: Owed now holds the past shoot with money left; the headline equals the full read; a page of one still counts every row',
+    pgOwed.status === 200 && pgOwed.json.owed_now === all.json.owed_now && pgOwed.json.paid === all.json.paid &&
+      pgOwed.json.rows.some((r) => r.slot_id === past) && !pgOwed.json.rows.some((r) => r.slot_id === ahead) &&
+      pgOwed.json.owed_count === pgOwed.json.rows_total &&
+      pgAll.status === 200 && pgAll.json.rows.length === 1 && pgAll.json.rows_total === all.json.rows.length && pgAll.json.bookings === all.json.rows.length,
+    { owed: pgOwed.status, all: pgAll.status, total: pgAll.json?.rows_total, full: all.json?.rows?.length },
+  )
+
   const mine = await api('/me/payouts', { token: cm })
   const cmOwed = await api('/team-payouts/owed', { token: cm })
   const cmRows = await api('/team-payouts/shoots', { token: cm })
+  const cmPage = await api('/team-payouts/shoots/page', { token: cm })
   check(
     'crew money: the freelancer sees 4,000 due for shoots done and 3,000 paid in advance; the studio’s crew money is 403 to them',
     mine.status === 200 && mine.json.owed_now === 4000 && mine.json.upcoming === 0 && mine.json.paid_ahead === 3000 &&
-      cmOwed.status === 403 && cmRows.status === 403,
-    { mine: mine.json && { owed_now: mine.json.owed_now, upcoming: mine.json.upcoming, ahead: mine.json.paid_ahead }, cmOwed: cmOwed.status, cmRows: cmRows.status },
+      cmOwed.status === 403 && cmRows.status === 403 && cmPage.status === 403,
+    { mine: mine.json && { owed_now: mine.json.owed_now, upcoming: mine.json.upcoming, ahead: mine.json.paid_ahead }, cmOwed: cmOwed.status, cmRows: cmRows.status, cmPage: cmPage.status },
   )
 }
 
@@ -3992,6 +4022,17 @@ if (listed) {
   await api('/team/members', { token: aToken, method: 'POST', body: { name: 'Due Staff', phone: randPhone(), email: se, password: 'Due-pass-1234', create_login: true } })
   const st = (await api('/auth/login', { ip: `203.0.113.${1 + Math.floor(Math.random() * 250)}`, method: 'POST', body: { email: se, password: 'Due-pass-1234' } })).json.access_token
   const staff = await api('/billing/due', { token: st })
+  // Home reads the tiles alone; a tile opens its own lines (speed check, 22 Nov).
+  const tilesOnly = await api('/billing/due?from=2000-01-01&to=2099-12-31&lines=none', { token: aToken })
+  const soonOnly = await api('/billing/due?from=2000-01-01&to=2099-12-31&lines=soon&limit=1000', { token: aToken })
+  check(
+    'payments received: lines=none sends the same tiles and no lines; lines=soon sends that bucket alone with its count',
+    tilesOnly.status === 200 && tilesOnly.json.lines.length === 0 && tilesOnly.json.soon.amount === due.json.soon.amount &&
+      soonOnly.status === 200 && soonOnly.json.lines.every((l) => l.bucket === 'soon') &&
+      soonOnly.json.lines_total === due.json.soon.count &&
+      soonOnly.json.lines.some((l) => l.project_id === pid && l.kind === 'promise'),
+    { tiles: tilesOnly.status, soon: soonOnly.status, total: soonOnly.json?.lines_total },
+  )
   check(
     'payments received: a project’s 70,000 still to come is counted once -- the promise in 30 days, the rest Later; tiles add up; staff 403',
     paid.status < 300 && promise.status < 300 && due.status === 200 &&

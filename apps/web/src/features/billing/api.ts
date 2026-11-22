@@ -572,14 +572,37 @@ export function useDeleteInvoiceItem() {
   })
 }
 
-/** Payments received's tiles: what is still to come in on dates, and the period's money in. */
-export function useBillingDue(range: { from: string; to: string }) {
+/**
+ * Payments received's tiles: what is still to come in on dates, and the
+ * period's money in. The tiles alone unless `lines` names a bucket: Home and
+ * the tiles never download the lines behind them (925 KB on a studio with a
+ * thousand projects, speed check 22 Nov); an opened tile reads its own
+ * bucket, `limit` lines at a time.
+ */
+export function useBillingDue(
+  range: { from: string; to: string },
+  opts: { lines?: 'none' | 'overdue' | 'soon' | 'later'; limit?: number; enabled?: boolean } = {},
+) {
   const { session } = useAuth()
   const access = useAccess()
+  const lines = opts.lines ?? 'none'
+  const limit = opts.limit ?? DUE_LINES_PAGE
   return useQuery({
-    queryKey: ['billing', 'due', range.from, range.to],
-    queryFn: () => callApi(`/billing/due?from=${range.from}&to=${range.to}`, { responseSchema: billingDue }),
-    enabled: !!session && access.hasModule('billing'),
+    queryKey: ['billing', 'due', range.from, range.to, lines, lines === 'none' ? 0 : limit],
+    queryFn: () =>
+      callApi(`/billing/due?from=${range.from}&to=${range.to}&lines=${lines}${lines === 'none' ? '' : `&limit=${limit}`}`, {
+        responseSchema: billingDue,
+      }),
+    enabled: !!session && access.hasModule('billing') && (opts.enabled ?? true),
     staleTime: 15_000,
+    // "Show more" keeps the lines on screen while the longer page comes;
+    // another tile or period starts clean.
+    placeholderData: (prev, prevQuery) => {
+      const k = prevQuery?.queryKey
+      return k && k[2] === range.from && k[3] === range.to && k[4] === lines ? prev : undefined
+    },
   })
 }
+
+/** How many of a tile's lines one read brings (the server's page, DUE_LINES_PAGE in routes-due.ts). */
+export const DUE_LINES_PAGE = 50

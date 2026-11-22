@@ -12,6 +12,7 @@ import { Dialog, DialogContent } from '@/shared/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
 import { StatusBadge } from '@/shared/ui/status-badge'
 import { formatINR } from '@/shared/ui/format'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { useFlowStops, usePlatformUsage } from '@/features/platform/api'
 import { finishRate, flowLabel, rankStops, stuckAdvice } from '@/features/platform/stuck'
 
@@ -31,7 +32,7 @@ function download(name: string, header: string[], rows: (string | number | null 
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `${name}-${todayInIndia()}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

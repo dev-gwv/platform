@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   type CrmTag,
   bulkPatchResponse,
+  followUpsLate,
   bulkUndoResponse,
   eraseLeadsResponse,
   cadence,
@@ -888,6 +889,18 @@ export function useActivities(
   if (opts.limit) params.set('limit', String(opts.limit))
   const qs = params.toString()
   return useCrmQuery(['activities', qs], () => callApi(`/crm/activities${qs ? `?${qs}` : ''}`, { responseSchema: crmActivity.array() }))
+}
+
+/**
+ * How many open follow-ups are late in the board's scope (the Leads header's
+ * "N late"): counted on the server, so Leads never downloads the whole board
+ * for one number. Under ['crm', 'activities'], so a follow-up saved, moved or
+ * done refreshes it with the board.
+ */
+export function useLateFollowUps(scope: 'mine' | 'all') {
+  return useCrmQuery(['activities', 'late', scope], () =>
+    callApi(`/crm/activities/late${scope === 'mine' ? '?mine=1' : ''}`, { responseSchema: followUpsLate }),
+  )
 }
 
 /** The deal's stage trail and activities, newest first, a page at a time. */

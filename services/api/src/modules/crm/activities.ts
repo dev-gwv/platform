@@ -7,6 +7,7 @@ import {
   crmIntegration,
   emailSyncRequest,
   emailSyncResponse,
+  followUpsLate,
   integrationProvider,
   placeCallRequest,
   placeCallResponse,
@@ -49,8 +50,30 @@ const selectActivity = (sql: TransactionSql) => sql`
   left join users wu on wu.user_id = coalesce(a.assigned_to, l.assigned_to, a.actor_id)
   left join crm_contacts ct on ct.id = a.contact_id`
 
+/**
+ * How many open follow-ups are late, in the board's scope: the same rows as
+ * `GET /activities?open_tasks=1&live=1` (with `mine`), due before now.
+ */
+export const lateFollowUpsCount = (sql: TransactionSql, me: string, mine: boolean) => sql<{ late: number }[]>`
+  select count(*)::int as late
+    from crm_activities a
+    left join crm_leads l on l.id = a.lead_id
+   where a.type = 'task' and a.done_at is null
+     and coalesce(l.is_archived, false) = false
+     and a.due_at < now()
+     and ${mine ? sql`coalesce(a.assigned_to, l.assigned_to, a.actor_id) = ${me}` : sql`true`}`
+
 export const crmActivitiesRouter = new Hono<AppEnv>()
   // ── Feed and CRUD ───────────────────────────────────────────
+  // The Leads header's "N late" (literal path, before any /activities/:id).
+  .get('/activities/late', async (c) => {
+    const mine = c.req.query('mine') === '1'
+    const me = c.get('auth').userId
+    const rows = await attempt(c, 'crm.activities_late', () => withUser(c.env, me, (sql) => lateFollowUpsCount(sql, me, mine)))
+    if (!rows) fail(400, 'We could not count late follow-ups.')
+    return c.json(followUpsLate.parse({ late: rows[0]?.late ?? 0 }))
+  })
+
   .get('/activities', async (c) => {
     const q = activitiesQuery.safeParse({
       lead_id: c.req.query('lead_id'),

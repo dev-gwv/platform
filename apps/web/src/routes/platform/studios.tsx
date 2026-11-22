@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/shared/ui/card'
 import { useConfirm } from '@/shared/ui/confirm'
 import { cn } from '@/shared/ui/cn'
 import { humanize } from '@/shared/ui/format'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { StudioFeatures } from '@/features/platform/StudioFeatures'
 import { planLabel } from '@/features/platform/plan-rows'
 import { useStudioActivity, usePlatformStudios, usePlatformPlanAction, usePlatformPlans, useAssignPlan, usePlanQuote, useAddGalleryPhotos, useLegacyStudios, useSetAccessUntil } from '@/features/platform/api'
@@ -65,7 +66,7 @@ function downloadAccessCsv(rows: AccessRow[], act: Map<string, StudioActivity>, 
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `${name}-${todayInIndia()}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

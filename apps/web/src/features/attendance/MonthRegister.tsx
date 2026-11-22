@@ -8,6 +8,7 @@ import { cn } from '@/shared/ui/cn'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
 import { EmptyState, ErrorState } from '@/shared/ui/states'
 import { SkeletonList } from '@/shared/ui/skeleton'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { useMonthRegister } from './api'
 import { CorrectDialog, useCanCorrectAttendance } from './CorrectDialog'
 
@@ -29,7 +30,7 @@ const shiftMonth = (month: string, by: number) => {
   const d = new Date(y, m - 1 + by, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-const thisMonth = () => shiftMonth(new Date().toISOString().slice(0, 7), 0)
+const thisMonth = () => shiftMonth(todayInIndia().slice(0, 7), 0)
 const monthTitle = (month: string) =>
   new Date(`${month}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1))

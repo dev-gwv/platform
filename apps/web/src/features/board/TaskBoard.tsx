@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { PanelBoundary } from '@/shared/layout/RouteError'
-import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCorners, useDroppable, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Palette } from 'lucide-react'
@@ -11,7 +11,7 @@ import { ErrorState } from '@/shared/ui/states'
 import { cn } from '@/shared/ui/cn'
 import { useLaneColors, useOlderDoneTasks, useSetLaneColor } from '@/features/tasks/api'
 import { useBoardMoves, useTaskColumnMore, useTaskColumns } from '@/features/tasks/board-api'
-import { TASK_COLUMN_PAGE, laneOf, type BoardQuery } from '@/features/tasks/board-columns'
+import { laneOf, showMoreLabel, type BoardQuery } from '@/features/tasks/board-columns'
 import { ShowOlderDone } from '@/features/tasks/ShowOlderDone'
 import { todayISO } from '@/features/tasks/board'
 import { BOARD_LANES } from '@/features/tasks/delegation'
@@ -26,7 +26,7 @@ import { TaskDrawer } from '@/features/tasks/TaskDrawer'
  *
  * A page at a time (speed audit, 21 Nov): each lane reads its first 30 cards
  * and its own count from GET /tasks/columns, with the toolbar applied on the
- * server; "Show N more" brings the next 30 of that lane. Done holds the last
+ * server; "Show N more" (all the lane has left) brings its next 30. Done holds the last
  * 30 days; older done tasks come in under it once it is all here.
  */
 const LANES = BOARD_LANES
@@ -107,7 +107,10 @@ export function TaskBoard({
   }
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // A mouse, not every pointer: a finger's pointerdown reached PointerSensor
+    // first, took the drag, and the browser cancelled it on the first move to
+    // scroll instead -- press-and-hold never moved a card (phone check, 22 Nov).
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     // A press-and-hold drags on a phone; a swipe still scrolls (audit, 18 Nov).
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   )
@@ -154,7 +157,10 @@ export function TaskBoard({
         </div>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {/* Below xl the lanes sit side by side and swipe sideways, as the
+            Leads pipeline does: stacked, a phone had To do's thirty cards
+            (a 25,000px page) between the top and In progress. */}
+        <div className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 xl:grid xl:grid-cols-5 xl:overflow-visible xl:pb-0">
           {LANES.map((lane) => {
             const l = lanes[lane.key]
             return (
@@ -208,7 +214,7 @@ export function TaskBoard({
   )
 }
 
-/** Under a lane that holds more than it shows: a bordered "Show N more" (the next 30 at most). */
+/** Under a lane that holds more than it shows: a bordered "Show N more" (N = all it has left; each press brings 30). */
 function ShowMore({ more, onShow, loading }: { more: number; onShow: () => void; loading: boolean }) {
   if (more <= 0) return null
   return (
@@ -216,9 +222,9 @@ function ShowMore({ more, onShow, loading }: { more: number; onShow: () => void;
       type="button"
       onClick={onShow}
       disabled={loading}
-      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
+      className="min-h-[40px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
     >
-      {loading ? 'Loading…' : `Show ${Math.min(more, TASK_COLUMN_PAGE)} more`}
+      {showMoreLabel(more, loading)}
     </button>
   )
 }
@@ -252,7 +258,7 @@ function Lane({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex min-h-40 flex-col gap-2 rounded-lg border p-3 transition-colors',
+        'flex min-h-40 w-[85%] shrink-0 snap-start flex-col gap-2 rounded-lg border p-3 transition-colors sm:w-80 xl:w-auto xl:shrink',
         isOver ? 'border-primary bg-primary/5' : tint.head,
       )}
     >
@@ -267,7 +273,7 @@ function Lane({
             type="button"
             aria-label={`Change ${label} lane colour`}
             onClick={() => setPicking((v) => !v)}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+            className="relative rounded p-1 text-muted-foreground transition-colors before:absolute before:-inset-[11px] hover:bg-card hover:text-foreground"
           >
             <Palette className="size-3.5" />
           </button>}

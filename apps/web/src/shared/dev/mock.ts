@@ -10,6 +10,7 @@ import { deriveStage } from '@/features/data/stage'
  * so production builds never carry it.
  */
 import { NOT_MOCKED } from './mock-flag'
+import { todayInIndia } from '@/shared/ui/days-left'
 import { fillDesign } from '@/features/designer/fill'
 
 
@@ -432,7 +433,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
     ]
   if (method === 'GET' && path === '/me/due')
     return [
-      { kind: 'edit', id: uid(0x7d9), title: 'Wedding Teaser', project_id: uid(0x7d8), project_name: 'Mehta Wedding', due: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10), days: 2, who: null, mine: true },
+      { kind: 'edit', id: uid(0x7d9), title: 'Wedding Teaser', project_id: uid(0x7d8), project_name: 'Mehta Wedding', due: todayInIndia(new Date(Date.now() + 2 * 86_400_000)), days: 2, who: null, mine: true },
     ]
   if (method === 'GET' && /^\/me\/projects\/[^/]+$/.test(path))
     return {
@@ -631,7 +632,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
       .filter((d) => d.status !== 'cancelled')
       .map((d) => ({ ...d, project_name: 'Sharma Wedding', client_name: 'Priya Sharma' }))
     const open = items.filter((d) => d.status !== 'completed')
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayInIndia()
     return {
       stages: deliverableStagesFx,
       items,
@@ -1304,6 +1305,10 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
   if (method === 'POST' && path === '/crm/activities/call') return { activity: crmActivitiesFx[0], placed: false, provider: 'manual', call_sid: null, dial_url: 'tel:+919876500001' }
   if (method === 'POST' && path === '/crm/activities/meeting') return { activity: crmActivitiesFx[2], ics_url: '/crm/activities/x/ics' }
   if (method === 'POST' && path === '/crm/activities/email/sync') return { status: 'not_configured', provider: null, fetched: 0, imported: 0, unmatched: 0, message: 'Mailbox sync is not configured in preview.' }
+  if (method === 'GET' && path.startsWith('/crm/activities/late')) {
+    const now = Date.now()
+    return { late: boardTasksFx().filter((t) => t.due_at && new Date(t.due_at).getTime() < now).length }
+  }
   if (method === 'GET' && path.startsWith('/crm/activities')) return path.includes('open_tasks=1') ? (path.includes('lead_id=') ? crmActivitiesFx.filter((x) => x.type === 'task' && !x.done_at) : boardTasksFx()) : crmActivitiesFx
   if (method === 'POST' && path === '/crm/activities') return { ...crmActivitiesFx[0], id: uid(0xe9), ...(body as Record<string, unknown>) }
   if ((method === 'PATCH' || method === 'DELETE') && path.startsWith('/crm/activities/')) return {}
@@ -1528,7 +1533,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
     const base = { avatar_url: null, check_out_at: null, place_name: null, distance_m: null, accuracy_m: null, selfie_file_id: null,
       source: null, closed_by_system: false, leave: null, shoot: null, expected: '10:00', grace: 15, late_minutes: 0 }
     return {
-      date: new Date().toISOString().slice(0, 10), enabled: true, day_off: null,
+      date: todayInIndia(), enabled: true, day_off: null,
       rows: [
         { ...base, user_id: uid(0xa1), name: 'Rahul Sharma', status: 'present', check_in_at: at(9, 52), place_name: 'Studio', distance_m: 18, accuracy_m: 12, source: 'auto_login' },
         { ...base, user_id: uid(0xa2), name: 'Sneha Iyer', status: 'late', check_in_at: at(10, 37), late_minutes: 37, place_name: 'Studio', distance_m: 40, accuracy_m: 20 },
@@ -1538,7 +1543,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
     }
   }
   if (method === 'GET' && path.startsWith('/hr/register')) {
-    const month = new URL(`http://x${path}`).searchParams.get('month') ?? new Date().toISOString().slice(0, 7)
+    const month = new URL(`http://x${path}`).searchParams.get('month') ?? todayInIndia().slice(0, 7)
     const [y, m] = month.split('-').map(Number) as [number, number]
     const days = new Date(y, m, 0).getDate()
     const cells = Array.from({ length: days }, (_, i) => {
@@ -1547,7 +1552,7 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
       return { day, status: dow === 0 ? null : i % 9 === 4 ? 'late' : i % 13 === 6 ? 'absent' : 'present', source: null,
         day_off: dow === 0 ? 'Weekly off' : null, leave: null, leave_unpaid: false, shoot: i % 11 === 3 }
     })
-    return { month, tracked_from: `${month}-01`, today: new Date().toISOString().slice(0, 10), late_marks_per_half_day: 0,
+    return { month, tracked_from: `${month}-01`, today: todayInIndia(), late_marks_per_half_day: 0,
       people: [{ user_id: uid(0xa1), name: 'Rahul Sharma', cells }, { user_id: uid(0xa2), name: 'Sneha Iyer', cells }] }
   }
   if (method === 'POST' && path === '/hr/check-out') return { id: uid(0xc1) }
@@ -4061,7 +4066,7 @@ const crmCadencesFx = [
 
 /** The member page, filled in the way a busy in-house photographer's would be. */
 function memberOverviewFx(id: string, name: string) {
-  const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+  const today = todayInIndia()
   const dayOffset = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
   return {
     member: {
@@ -4455,7 +4460,7 @@ function designMock(path: string, method: string, body?: unknown): unknown {
 // Payments' tiles and the Billing overview all add up to the same rupees.
 
 /** Today in India, so "today" rows never read as yesterday before 5:30 am. */
-const indiaToday = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10)
+const indiaToday = () => todayInIndia()
 const monthStart = () => `${indiaToday().slice(0, 7)}-01`
 
 const hintsFx: Record<string, unknown> = { welcome: { shown: 1, closed: true } }
@@ -4770,8 +4775,8 @@ function extraMock(path: string, q: URLSearchParams, method: string, body?: unkn
     const due = dueFx()
     // As the server counts them (billing/routes-due.ts): invoices alone, by
     // their due date -- never Payments' promises and plan parts.
-    const today = new Date().toISOString().slice(0, 10)
-    const week = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+    const today = todayInIndia()
+    const week = todayInIndia(new Date(Date.now() + 7 * 86_400_000))
     const sum = (xs: typeof open) => ({ count: xs.length, amount: xs.reduce((n, i) => n + i.balance_due, 0) })
     return {
       to_collect: due.overdue.amount + due.soon.amount + due.later.amount,

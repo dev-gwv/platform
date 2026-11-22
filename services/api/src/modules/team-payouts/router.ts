@@ -10,6 +10,8 @@ import {
   slotPayStatus,
   paySlotRequest,
   crewPayouts,
+  crewPayoutsPage,
+  crewPayoutsPageQuery,
   crewOwed,
   z,
 } from '@ipc/contracts'
@@ -19,7 +21,7 @@ import { requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
 import { withService, withUser } from '../../lib/db'
-import { crewOwedFrom, crewPayoutRows } from '../../lib/payout-rows'
+import { crewOwedFrom, crewPayoutRows, crewPayoutsPageFrom } from '../../lib/payout-rows'
 import { attempt } from '../../lib/attempt'
 import { audit } from '../../lib/audit'
 import { rpcJson } from '../../lib/rpc'
@@ -279,6 +281,23 @@ export const teamPayoutsRouter = new Hono<AppEnv>()
     )
     if (!rows) fail(400, 'We could not load the payouts.')
     return c.json(crewPayouts.parse({ ...crewOwedFrom(rows), rows }))
+  })
+
+  /**
+   * Team payouts a page at a time: the view (Owed now, Upcoming, All, By
+   * project) and its filters applied here, the first `limit` rows sent. The
+   * headline still covers every booking. Literal path, ahead of any
+   * /shoots/:id.
+   */
+  .get('/shoots/page', async (c) => {
+    const auth = c.get('auth')
+    const parsed = crewPayoutsPageQuery.safeParse(c.req.query())
+    if (!parsed.success) fail(422, 'Please check the filters.')
+    const rows = await attempt(c, 'team-payouts.shoots_page', () =>
+      withService(c.env, (sql) => crewPayoutRows(sql, auth.companyId)),
+    )
+    if (!rows) fail(400, 'We could not load the payouts.')
+    return c.json(crewPayoutsPage.parse(crewPayoutsPageFrom(rows, parsed.data)))
   })
 
   /** What the studio owes its crew for shoots already done: the dashboard's "Who you owe". */

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   pointerWithin,
   rectIntersection,
@@ -49,7 +49,10 @@ export const collide: CollisionDetection = (args) => {
 
 export function useBoardSensors() {
   return useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // A mouse, not every pointer: a finger's pointerdown reached PointerSensor
+    // first, took the drag, and the browser cancelled it on the first move to
+    // scroll instead -- press-and-hold never moved a card (phone check, 22 Nov).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     // A press-and-hold on a phone, so a swipe still scrolls the board.
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
   )

@@ -10,9 +10,12 @@ import {
   assemblePage,
   decodeBoardCursor,
   encodeBoardCursor,
+  fillSlots,
   placeRestAfter,
   selectColumnKeys,
   selectColumnPageKeys,
+  selectLaneOrder,
+  writeLaneOrder,
   type BoardKey,
   type BoardStatus,
 } from './task-columns'
@@ -239,5 +242,35 @@ describe('POST /tasks/board/order with rest_after', () => {
     // Other lanes are untouched.
     const doing = (await board(OWNER, ownerFilter, 10)).find((c) => c.status === 'in_progress')!.items.map((r) => r.id)
     expect(doing).toEqual([T(27), T(28), T(26)])
+  })
+})
+
+describe('a drag on a filtered board', () => {
+  it('moves the cards shown among their own places; every hidden card keeps its place', () => {
+    expect(fillSlots(['a', 'B', 'c', 'D', 'e', 'F'], ['F', 'B', 'D'])).toEqual(['a', 'F', 'c', 'B', 'e', 'D'])
+    // Unfiltered and all loaded: the plain order.
+    expect(fillSlots(['a', 'b', 'c'], ['c', 'a', 'b'])).toEqual(['c', 'a', 'b'])
+    // A card the lane did not hold goes last; a repeat counts once.
+    expect(fillSlots(['a', 'b'], ['b', 'x', 'b', 'a'])).toEqual(['b', 'a', 'x'])
+  })
+
+  // After the rest_after test: it reads the To do lane as that one left it.
+  it("POST /tasks/board/order with keep_hidden: Ravi's cards swap places, nobody else's move", async () => {
+    const before = (await wholeColumn(OWNER, ownerFilter, 'to_do', 30)).ids
+    const ravi = { ...ownerFilter, member: MEMBER }
+    const shown = (await wholeColumn(OWNER, ravi, 'to_do', 30)).ids
+    expect(shown).toHaveLength(5)
+    const dragged = [...shown].reverse()
+    const lane = (await run<{ id: string }>(OWNER, selectLaneOrder(fakeSql, 'default', 'to_do'))).map((r) => r.id)
+    expect(lane).toEqual(before)
+    await run(OWNER, fakeSql`select set_board_lane_order(${'default'}, ${'to_do'}, ${dragged}::uuid[])`)
+    await run(OWNER, writeLaneOrder(fakeSql, STUDIO, 'default', 'to_do', fillSlots(lane, dragged)))
+    const after = (await wholeColumn(OWNER, ownerFilter, 'to_do', 7)).ids
+    expect(after).toHaveLength(25)
+    before.forEach((id, i) => {
+      if (!shown.includes(id)) expect(after[i]).toBe(id)
+    })
+    expect(after.filter((id) => shown.includes(id))).toEqual(dragged)
+    expect((await wholeColumn(OWNER, ravi, 'to_do', 30)).ids).toEqual(dragged)
   })
 })
