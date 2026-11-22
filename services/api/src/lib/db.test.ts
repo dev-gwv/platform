@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pgText, pgTypes } from './db'
+import { connectionSettings, pgText, pgTypes } from './db'
 
 /**
  * Regression test for the production outage where every endpoint with a
@@ -39,5 +39,13 @@ describe('pgTypes serializers always return strings', () => {
     expect(pgText('hello')).toBe('hello')
     expect(pgText(51)).toBe('51')
     expect(pgText(true)).toBe('true')
+  })
+})
+
+describe('connection settings', () => {
+  // JIT compiling cost 1.3-2.8 s on each report query of a 1,000-project
+  // studio (Financials waited 5.5 s; the P&L 1.7 s, 39 ms without it).
+  it('turns the JIT compiler off for every pooled connection', () => {
+    expect(connectionSettings.jit).toBe('off')
   })
 })

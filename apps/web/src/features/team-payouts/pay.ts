@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { crewOwed, crewPayouts, myPayouts, projectPayoutRow, slotPayStatus, type PaySlotRequest } from '@ipc/contracts'
+import { crewOwed, crewPayouts, crewPayoutsPage, myPayouts, projectPayoutRow, slotPayStatus, type PaySlotRequest } from '@ipc/contracts'
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { useAccess } from '@/shared/auth/useAccess'
@@ -82,6 +82,32 @@ export function useCrewPayouts(userId?: string | null) {
       callApi(`/team-payouts/shoots${userId ? `?user_id=${userId}` : ''}`, { responseSchema: crewPayouts }),
     enabled: !!session && can,
     staleTime: 15_000,
+  })
+}
+
+/**
+ * Team payouts a page at a time (GET /team-payouts/shoots/page): the view and
+ * filters run on the server, `limit` rows come back. A longer page keeps the
+ * shorter one on screen while it comes; another view or filter starts clean.
+ */
+export function useCrewPayoutsPage(q: { view: string; q?: string; project_id?: string; from?: string; to?: string }, limit: number) {
+  const { session } = useAuth()
+  const can = useCanPay()
+  const params = new URLSearchParams({ view: q.view, limit: String(limit) })
+  for (const k of ['q', 'project_id', 'from', 'to'] as const) {
+    const v = q[k]?.trim()
+    if (v) params.set(k, v)
+  }
+  const filterKey = [q.view, q.q?.trim() ?? '', q.project_id ?? '', q.from ?? '', q.to ?? '']
+  return useQuery({
+    queryKey: ['payouts', 'crew', 'page', ...filterKey, limit],
+    queryFn: () => callApi(`/team-payouts/shoots/page?${params.toString()}`, { responseSchema: crewPayoutsPage }),
+    enabled: !!session && can,
+    staleTime: 15_000,
+    placeholderData: (prev, prevQuery) => {
+      const k = prevQuery?.queryKey
+      return k && filterKey.every((v, i) => k[3 + i] === v) ? prev : undefined
+    },
   })
 }
 

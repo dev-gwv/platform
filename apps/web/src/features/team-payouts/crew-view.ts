@@ -1,4 +1,4 @@
-import { crewBucketOf, lineBalance } from '@ipc/domain'
+import { crewBucketOf, crewPersonTotals, lineBalance, type CrewPersonTotals } from '@ipc/domain'
 import type { CrewOwed, CrewPayoutRow } from '@ipc/contracts'
 import { amountsHidden, screenINR } from '@/shared/money/hide'
 
@@ -16,73 +16,8 @@ export function crewViewOf(v: string | null | undefined): CrewView {
   return v === 'upcoming' || v === 'all' || v === 'projects' ? v : 'owed'
 }
 
-export interface ProjectCrewMoney {
-  project_id: string | null
-  project_name: string
-  /** Every standing booking's payout. */
-  booked: number
-  paid: number
-  /** Shoots already done, minus what is paid on them. */
-  owed: number
-  /** Promised for shoots still to come, minus anything paid ahead. */
-  upcoming: number
-  people: number
-  /** Bookings with no payout set yet. */
-  unset: number
-  last_shoot: string
-}
-
-/**
- * One line per project: what its crew was promised, what has gone out, what
- * is owed now and what is still to come. Each rupee once, by the same rule as
- * Owed now (a released booking counts only what was paid on it).
- */
-export function crewByProject(rows: readonly CrewPayoutRow[], today: string): ProjectCrewMoney[] {
-  const by = new Map<string, ProjectCrewMoney & { _people: Set<string> }>()
-  for (const r of rows) {
-    const key = r.project_id ?? 'none'
-    const m =
-      by.get(key) ??
-      ({ project_id: r.project_id, project_name: r.project_name ?? 'No project', booked: 0, paid: 0, owed: 0, upcoming: 0, people: 0, unset: 0, last_shoot: r.shoot_date, _people: new Set<string>() } as ProjectCrewMoney & { _people: Set<string> })
-    m.paid += r.paid
-    if (r.stands) {
-      m.booked += r.amount
-      if (r.amount <= 0) m.unset += 1
-      const left = lineBalance(r)
-      if (crewBucketOf(r.shoot_date, today) === 'past') m.owed += left
-      else m.upcoming += left
-    }
-    m._people.add(r.user_id)
-    if (r.shoot_date > m.last_shoot) m.last_shoot = r.shoot_date
-    by.set(key, m)
-  }
-  return [...by.values()]
-    .map(({ _people, ...m }) => ({ ...m, people: _people.size }))
-    .sort((a, b) => b.owed - a.owed || b.last_shoot.localeCompare(a.last_shoot))
-}
-
-interface CrewFilters {
-  project?: string
-  q?: string
-  from?: string
-  to?: string
-}
-
-/** The rows a view shows: Owed now is shoots already done with money left on them. */
-export function crewRowsFor(rows: readonly CrewPayoutRow[], view: CrewView, today: string, f: CrewFilters = {}) {
-  const q = f.q?.trim().toLowerCase() ?? ''
-  return rows.filter((r) => {
-    const bucket = crewBucketOf(r.shoot_date, today)
-    if (view === 'owed' && (bucket !== 'past' || lineBalance(r) <= 0.001)) return false
-    if (view === 'upcoming' && bucket !== 'upcoming') return false
-    // 'projects' and 'all' keep every row; the filters below still apply.
-    if (f.project && r.project_id !== f.project) return false
-    if (f.from && r.shoot_date < f.from) return false
-    if (f.to && r.shoot_date > f.to) return false
-    if (q && !(r.user_name ?? '').toLowerCase().includes(q)) return false
-    return true
-  })
-}
+/** Worked out on the server for the page (and here for the CSV): see crew-owed.ts in @ipc/domain. */
+export { crewByProject, crewRowsFor, type ProjectCrewMoney } from '@ipc/domain'
 
 /**
  * One row's money in words: "₹6,000 left of ₹10,000", "₹3,000 paid in advance", "Paid".
@@ -119,26 +54,28 @@ export function crewRowNote(r: Pick<CrewPayoutRow, 'amount' | 'paid' | 'stands' 
  * "left" -- crew money is owed once the shoot day has passed.
  */
 export function crewPersonLine(
-  list: readonly Pick<CrewPayoutRow, 'amount' | 'paid' | 'shoot_date'>[],
+  list: readonly Pick<CrewPayoutRow, 'user_id' | 'user_name' | 'amount' | 'paid' | 'shoot_date'>[],
   today: string,
   money: (n: number) => string,
 ): string {
-  let owed = 0
-  let ahead = 0
-  let aheadShoots = 0
-  for (const r of list) {
-    const bal = lineBalance(r)
-    if (crewBucketOf(r.shoot_date, today) === 'past') owed += bal
-    else if (bal > 0.001) {
-      ahead += bal
-      aheadShoots += 1
-    }
-  }
+  const t = crewPersonTotals(list, today)
+  const sum = t.reduce(
+    (a, p) => ({ owed: a.owed + p.owed, ahead: a.ahead + p.ahead, ahead_shoots: a.ahead_shoots + p.ahead_shoots, shoots: a.shoots + p.shoots }),
+    { owed: 0, ahead: 0, ahead_shoots: 0, shoots: 0 },
+  )
+  return crewPersonWords(sum, money)
+}
+
+/** The same header from a person's totals, as the server sends them with a page. */
+export function crewPersonWords(
+  t: Pick<CrewPersonTotals, 'owed' | 'ahead' | 'ahead_shoots' | 'shoots'>,
+  money: (n: number) => string,
+): string {
   const parts: string[] = []
-  if (owed > 0.001) parts.push(`${money(owed)} owed`)
-  if (ahead > 0.001) parts.push(`${money(ahead)} after the ${aheadShoots === 1 ? 'shoot' : 'shoots'}`)
+  if (t.owed > 0.001) parts.push(`${money(t.owed)} owed`)
+  if (t.ahead > 0.001) parts.push(`${money(t.ahead)} after the ${t.ahead_shoots === 1 ? 'shoot' : 'shoots'}`)
   if (parts.length === 0) parts.push('All paid')
-  parts.push(`${list.length} ${list.length === 1 ? 'shoot' : 'shoots'}`)
+  parts.push(`${t.shoots} ${t.shoots === 1 ? 'shoot' : 'shoots'}`)
   return parts.join(' · ')
 }
 

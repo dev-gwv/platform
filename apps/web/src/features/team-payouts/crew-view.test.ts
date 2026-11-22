@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrewPayoutRow } from '@ipc/contracts'
-import { crewByProject, crewPersonLine, crewRowLine, crewRowNote, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
+import { crewByProject, crewPersonLine, crewPersonWords, crewRowLine, crewRowNote, crewRowsFor, crewViewOf, myPayoutsLine, whoYouOweLine } from './crew-view'
 
 const today = '2026-10-02'
 const row = (o: Partial<CrewPayoutRow>): CrewPayoutRow => ({
@@ -100,6 +100,11 @@ describe('crewPersonLine', () => {
   it('splits what is owed from what comes later', () => {
     expect(crewPersonLine([row({}), row({ shoot_date: '2026-11-21', amount: 12000 })], today, money)).toBe('Rs 10000 owed · Rs 12000 after the shoot · 2 shoots')
     expect(crewPersonLine([row({ paid: 10000 })], today, money)).toBe('All paid · 1 shoot')
+  })
+  it('reads the same from the totals a page brings (crewPersonWords)', () => {
+    expect(crewPersonWords({ owed: 10000, ahead: 12000, ahead_shoots: 1, shoots: 2 }, money)).toBe('Rs 10000 owed · Rs 12000 after the shoot · 2 shoots')
+    expect(crewPersonWords({ owed: 0, ahead: 9000, ahead_shoots: 2, shoots: 5 }, money)).toBe('Rs 9000 after the shoots · 5 shoots')
+    expect(crewPersonWords({ owed: 0, ahead: 0, ahead_shoots: 0, shoots: 1 }, money)).toBe('All paid · 1 shoot')
   })
 })
 

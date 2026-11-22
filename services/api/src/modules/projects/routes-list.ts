@@ -17,6 +17,18 @@ import { todayInIndia } from '../../lib/dates'
 import { audit } from '../../lib/audit'
 import { requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
 
+/**
+ * The `n` projects most in need, worst first: scored above nothing, highest
+ * score first, ties in the order given (newest project first) -- what Home's
+ * Needs attention drew from the whole list.
+ */
+export function worstProjects<T extends { health: { score: number } }>(rows: readonly T[], n: number): T[] {
+  return rows
+    .filter((r) => r.health.score > 0)
+    .sort((a, b) => b.health.score - a.health.score)
+    .slice(0, n)
+}
+
 export const projectListRoutes = new Hono<AppEnv>()
   .get('/', requireAction('projects', 'view'), async (c) => {
     const url = new URL(c.req.url)
@@ -133,9 +145,16 @@ export const projectListRoutes = new Hono<AppEnv>()
   // completed project always scores 0 there, so counting every project the
   // studio ever finished was work for nothing (speed audit, 21 Nov). The
   // tracking page asks for all: its Done tab lists them.
+  //
+  // `?worst=N` (Home's Needs attention shows three): only the N projects
+  // scoring highest, as Home sorted them itself -- it downloaded every open
+  // project to show three (426 KB on a 1,000-project studio, speed check
+  // 22 Nov). The counting is the same; only the answer is shorter.
   .get('/tracking', requireAction('projects', 'view'), requireStudioWork, async (c) => {
     const seesMoney = c.get('auth').access.hasModule('billing')
     const openOnly = c.req.query('open') === '1'
+    const worstRaw = c.req.query('worst')
+    const worst = worstRaw ? Math.min(50, Math.max(1, Math.floor(Number(worstRaw)) || 1)) : null
     const rows = await attempt(c, 'projects.tracking', () =>
       withUser(
         c.env,
@@ -261,7 +280,7 @@ export const projectListRoutes = new Hono<AppEnv>()
         health,
       }
     })
-    return c.json(projectTrackingRow.array().parse(out))
+    return c.json(projectTrackingRow.array().parse(worst ? worstProjects(out, worst) : out))
   })
 
   // One project opened up: what is late or waiting, on whom, the shoots and

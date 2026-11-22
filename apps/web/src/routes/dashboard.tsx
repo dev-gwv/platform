@@ -41,6 +41,9 @@ import { leadsLine, moneyTile, shootsLine } from '@/features/dashboard/tiles'
 import { seesStudioWork } from '@ipc/permissions'
 import { useINR } from '@/shared/money/MoneyMask'
 
+/** How many projects Home's Needs attention lists. */
+const NEEDS_ATTENTION_ROWS = 3
+
 export function DashboardPage() {
   return <DashboardInner />
 }
@@ -94,9 +97,11 @@ function StudioCommandCenter() {
   // The dashboard's operational half runs off the same tracking pass the
   // Project Tracking screen uses, so the two can never disagree about which
   // job is on fire.
+  // Needs attention shows three, so the server sends the three worst
+  // (`worst=3`), scored and ordered as before.
   const trackingRows = useQuery({
-    queryKey: ['projects', 'tracking', 'open'],
-    queryFn: () => callApi('/projects/tracking?open=1', { responseSchema: projectTrackingRow.array() }),
+    queryKey: ['projects', 'tracking', 'open', 'worst', NEEDS_ATTENTION_ROWS],
+    queryFn: () => callApi(`/projects/tracking?open=1&worst=${NEEDS_ATTENTION_ROWS}`, { responseSchema: projectTrackingRow.array() }),
     enabled: !!session && access.hasModule('projects'),
     staleTime: 30_000,
   })
@@ -320,7 +325,7 @@ function NeedsAttention({ projects }: { projects: readonly TrackedProject[] }) {
   const worst = [...projects]
     .filter((p) => p.health.score > 0)
     .sort((a, b) => b.health.score - a.health.score)
-    .slice(0, 3)
+    .slice(0, NEEDS_ATTENTION_ROWS)
 
   return (
     <Card>

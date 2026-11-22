@@ -251,3 +251,64 @@ export type CrewOwed = z.infer<typeof crewOwed>
 
 export const crewPayouts = crewOwed.extend({ rows: z.array(crewPayoutRow) })
 export type CrewPayouts = z.infer<typeof crewPayouts>
+
+/** Team payouts' views (crewRowsFor in @ipc/domain). */
+export const crewView = z.enum(['owed', 'upcoming', 'all', 'projects'])
+
+/** How many rows (or projects) a page of Team payouts brings. */
+export const CREW_PAGE = 100
+
+/** GET /team-payouts/shoots/page: one view, filtered and cut on the server. */
+export const crewPayoutsPageQuery = z.object({
+  view: crewView.default('owed'),
+  /** A person's name, any part of it. */
+  q: z.string().trim().max(80).optional(),
+  project_id: uuid.optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(CREW_PAGE),
+})
+export type CrewPayoutsPageQuery = z.infer<typeof crewPayoutsPageQuery>
+
+export const crewPersonTotalsRow = z.object({
+  user_id: uuid,
+  user_name: z.string().nullable(),
+  owed: z.number(),
+  ahead: z.number(),
+  ahead_shoots: z.number().int(),
+  shoots: z.number().int(),
+})
+
+export const projectCrewMoneyRow = z.object({
+  project_id: uuid.nullable(),
+  project_name: z.string(),
+  booked: z.number(),
+  paid: z.number(),
+  owed: z.number(),
+  upcoming: z.number(),
+  people: z.number().int(),
+  unset: z.number().int(),
+  last_shoot: isoDate,
+})
+
+/**
+ * One page of Team payouts: the studio's headline (every booking, as
+ * GET /team-payouts/shoots), how many are owed now, and the view's first
+ * `limit` rows -- or, By project, its first `limit` projects -- with each
+ * person's totals over every row the view holds, so a header never counts
+ * only the rows on screen.
+ */
+export const crewPayoutsPage = crewOwed.extend({
+  view: crewView,
+  /** Every booking the studio has, in any view: none says "No bookings yet". */
+  bookings: z.number().int(),
+  owed_count: z.number().int(),
+  rows: z.array(crewPayoutRow),
+  rows_total: z.number().int(),
+  persons: z.array(crewPersonTotalsRow),
+  projects: z.array(projectCrewMoneyRow),
+  projects_total: z.number().int(),
+  /** The By project footer: every project the view holds, added up. */
+  project_totals: z.object({ booked: z.number(), paid: z.number(), owed: z.number(), upcoming: z.number() }),
+})
+export type CrewPayoutsPage = z.infer<typeof crewPayoutsPage>

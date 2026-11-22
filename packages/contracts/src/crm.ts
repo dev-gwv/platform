@@ -1738,6 +1738,14 @@ export const crmActivity = z.object({
 })
 export type CrmActivity = z.infer<typeof crmActivity>
 
+/**
+ * The Leads header's "N late": open follow-ups (on leads not archived) whose
+ * time has passed -- the follow-up board's Overdue column, counted on the
+ * server instead of downloading the board (speed check, 22 Nov).
+ */
+export const followUpsLate = z.object({ late: z.number().int() })
+export type FollowUpsLate = z.infer<typeof followUpsLate>
+
 export const activitiesQuery = z.object({
   lead_id: uuid.optional(),
   contact_id: uuid.optional(),

@@ -9,7 +9,7 @@ import { useAccess } from '@/shared/auth/useAccess'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
 import { useIsMobile } from '@/shared/hooks/use-mobile'
 import { Button } from '@/shared/ui/button'
-import { Input, Select } from '@/shared/ui/input'
+import { Input } from '@/shared/ui/input'
 import { SkeletonList } from '@/shared/ui/skeleton'
 import { ErrorState, EmptyState } from '@/shared/ui/states'
 import { RecordCard, RecordCards } from '@/shared/ui/record-card'
@@ -25,7 +25,7 @@ import { BillingStrip } from '@/features/billing/BillingStrip'
 import { RecordPaymentDialog } from '@/features/billing/RecordPaymentDialog'
 import { dueText, invoiceBadge, isOverdue, shortDate } from '@/features/billing/status'
 import { copyInvoiceLink, emailInvoice, whatsappInvoice } from '@/features/billing/share'
-import { useClients } from '@/features/clients/api'
+import { ClientPicker } from '@/features/clients/ClientPicker'
 import { useProject } from '@/features/projects/api'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { InvoiceBadge } from '@/features/billing/InvoiceBadge'
@@ -73,8 +73,6 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
   const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(!!newInvoice)
   const [recording, setRecording] = useState<InvoiceListItem | null>(null)
-  const { data: clientsData } = useClients()
-  const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
   const { data: overview } = useBillingOverview()
   const del = useDeleteInvoice()
   const sendInvoice = useSendInvoice()
@@ -300,22 +298,16 @@ function Invoices({ newInvoice }: { newInvoice?: boolean | undefined }) {
         </div>
         {filtering && (
           <div className="flex flex-wrap items-center gap-2">
-            <Select
+            <ClientPicker
               value={clientId}
-              onChange={(e) => change(() => {
-                setClientId(e.target.value)
+              onChange={(id) => change(() => {
+                setClientId(id)
                 setProjectId('')
               })}
-              className="w-full sm:w-44"
+              noneLabel="All clients"
+              className="sm:w-44"
               aria-label="Filter by client"
-            >
-              <option value="">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+            />
             <ProjectPicker
               value={projectId}
               onChange={(id) => change(() => setProjectId(id))}
