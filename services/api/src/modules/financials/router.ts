@@ -29,6 +29,7 @@ import { fail } from '../../middleware/errors'
 import { numberQuery, uuidParam, uuidQuery } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
+import { todayInIndia } from '../../lib/dates'
 import { rpcJson } from '../../lib/rpc'
 import { audit } from '../../lib/audit'
 import { PROJECT_LIFE, PROJECT_MARGIN_SQL } from './project-margin'
@@ -539,7 +540,7 @@ export const financialsRouter = new Hono<AppEnv>()
   // Lovable parity: month picker + cash/booked basis + alloc equal/revenue/
   // shoot_days/headcount + cards + warnings + per-project breakdown + salary buckets.
   .get('/monthly-profit-summary', requireModule('financials'), async (c) => {
-    const month = c.req.query('month') || new Date().toISOString().slice(0, 7) + '-01'
+    const month = c.req.query('month') || todayInIndia().slice(0, 7) + '-01'
     const basis = c.req.query('basis') === 'booked' ? 'booked' : 'cash'
     const alloc = ['equal', 'revenue', 'shoot_days', 'headcount'].includes(c.req.query('alloc') ?? '') ? c.req.query('alloc')! : 'equal'
     // The inner `try { ... } catch { return null }` that used to be here

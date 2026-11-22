@@ -6,6 +6,7 @@ import { requireModule } from '../../middleware/permissions'
 import { fail } from '../../middleware/errors'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
+import { todayInIndia } from '../../lib/dates'
 
 /**
  * Today's calls (0201), under /crm. The ranking lives in crm_call_queue so
@@ -19,7 +20,7 @@ const ymd = /^\d{4}-\d{2}-\d{2}$/
 function dayParam(c: { req: { query(k: string): string | undefined } }): string {
   const d = c.req.query('date')
   if (d && !ymd.test(d)) fail(422, 'Date is YYYY-MM-DD.')
-  return d ?? new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)
+  return d ?? todayInIndia()
 }
 
 export const crmCallsRouter = new Hono<AppEnv>()

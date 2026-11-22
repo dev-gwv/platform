@@ -13,6 +13,7 @@ import { fail } from '../../middleware/errors'
 import { uuidParam } from '../../lib/params'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
+import { todayInIndia } from '../../lib/dates'
 import { audit } from '../../lib/audit'
 import { requireStudioWork, seesMoney, studioWork, worksOn } from '../../lib/scope'
 
@@ -245,7 +246,7 @@ export const projectListRoutes = new Hono<AppEnv>()
       ),
     )
     if (!rows) fail(400, 'We could not load project tracking.')
-    const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+    const today = todayInIndia()
     const out = rows.map((r) => {
       const counters = { ...r, total_cost: Number(r.total_cost ?? 0), received: Number(r.received ?? 0) }
       const health = projectHealth(counters as ProjectCounters, today)

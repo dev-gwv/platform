@@ -42,12 +42,11 @@ import {
 import { DeliverableTile, EventTile } from '@/shared/ui/icon-tile'
 import { useINR } from '@/shared/money/MoneyMask'
 import { useUrlParam } from '@/shared/hooks/use-url-param'
+import { todayInIndia } from '@/shared/ui/days-left'
 
 const list = projectTrackingRow.array()
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' })
 const day = (d: string | null) => (d ? dayFormat.format(new Date(`${d}T00:00:00`)) : '—')
-/** Today where the studio is (India), as YYYY-MM-DD. */
-const todayIST = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
 
 export function ProjectTrackingPage() {
   return (
@@ -87,7 +86,7 @@ function ProjectTracking() {
     staleTime: 30_000,
   })
 
-  const projects = useMemo(() => track(data ?? [], todayIST()), [data])
+  const projects = useMemo(() => track(data ?? [], todayInIndia()), [data])
   const searched = useMemo(() => projects.filter((p) => matchesSearch(p, q)), [projects, q])
   const counts = useMemo(() => tabCounts(searched), [searched])
   const figures = useMemo(() => summary(projects), [projects])
@@ -97,7 +96,7 @@ function ProjectTracking() {
 
   function exportCsv() {
     downloadCsv(
-      `project-tracking-${todayIST()}.csv`,
+      `project-tracking-${todayInIndia()}.csv`,
       toCsv(
         [
           'Project', 'Client', 'Health', 'Why', 'Next step', 'Work done %', 'Late', 'Data not safe', 'To review', 'Shoots short of crew',
@@ -371,7 +370,7 @@ function Breakdown({ project: p }: { project: TrackedProject }) {
         ) : (
           <ul className="space-y-1 text-sm">
             {data.shoots.map((s) => {
-              const short = s.needed > s.booked && (!s.shoot_date || s.shoot_date >= todayIST())
+              const short = s.needed > s.booked && (!s.shoot_date || s.shoot_date >= todayInIndia())
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-2">
                   <EventTile name={s.name} size="sm" />
