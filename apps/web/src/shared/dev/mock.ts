@@ -1304,6 +1304,10 @@ function baseMock(path: string, method: string, body?: unknown): unknown {
   if (method === 'POST' && path === '/crm/activities/call') return { activity: crmActivitiesFx[0], placed: false, provider: 'manual', call_sid: null, dial_url: 'tel:+919876500001' }
   if (method === 'POST' && path === '/crm/activities/meeting') return { activity: crmActivitiesFx[2], ics_url: '/crm/activities/x/ics' }
   if (method === 'POST' && path === '/crm/activities/email/sync') return { status: 'not_configured', provider: null, fetched: 0, imported: 0, unmatched: 0, message: 'Mailbox sync is not configured in preview.' }
+  if (method === 'GET' && path.startsWith('/crm/activities/late')) {
+    const now = Date.now()
+    return { late: boardTasksFx().filter((t) => t.due_at && new Date(t.due_at).getTime() < now).length }
+  }
   if (method === 'GET' && path.startsWith('/crm/activities')) return path.includes('open_tasks=1') ? (path.includes('lead_id=') ? crmActivitiesFx.filter((x) => x.type === 'task' && !x.done_at) : boardTasksFx()) : crmActivitiesFx
   if (method === 'POST' && path === '/crm/activities') return { ...crmActivitiesFx[0], id: uid(0xe9), ...(body as Record<string, unknown>) }
   if ((method === 'PATCH' || method === 'DELETE') && path.startsWith('/crm/activities/')) return {}

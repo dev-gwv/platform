@@ -562,5 +562,14 @@ export const billingDue = z.object({
   later: dueTile,
   received: dueTile,
   lines: z.array(dueLine),
+  /**
+   * With `?lines=<bucket>`: how many lines that bucket has in all, of which
+   * `lines` carries the first `limit`. Absent when every line is sent.
+   */
+  lines_total: z.number().int().optional(),
 })
 export type BillingDue = z.infer<typeof billingDue>
+
+/** Which of /billing/due's lines to send: none (the tiles only), one bucket, or every line. */
+export const dueLinesWanted = z.enum(['none', 'overdue', 'soon', 'later', 'all'])
+export type DueLinesWanted = z.infer<typeof dueLinesWanted>

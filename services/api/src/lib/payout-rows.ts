@@ -1,6 +1,6 @@
 import type { TransactionSql } from 'postgres'
-import { summarizeCrewOwed } from '@ipc/domain'
-import type { CrewPayoutRow } from '@ipc/contracts'
+import { crewByProject, crewPersonTotals, crewRowsFor, roundINR, summarizeCrewOwed } from '@ipc/domain'
+import type { CrewPayoutRow, CrewPayoutsPage, CrewPayoutsPageQuery } from '@ipc/contracts'
 import { todayInIndia } from './dates'
 
 /**
@@ -58,4 +58,33 @@ export async function crewPayoutRows(
 
 export function crewOwedFrom(rows: readonly CrewPayoutRow[], today = todayInIndia()) {
   return { today, ...summarizeCrewOwed(rows, today) }
+}
+
+/**
+ * One page of Team payouts from every booking's row: the headline over all of
+ * them, the view filtered on the server, its first `limit` rows (or projects,
+ * By project) and each person's totals over the whole view. The browser used
+ * to get every row and do this itself (3 MB for 7,500 bookings).
+ */
+export function crewPayoutsPageFrom(rows: readonly CrewPayoutRow[], q: CrewPayoutsPageQuery, today = todayInIndia()): CrewPayoutsPage {
+  const filters = { project: q.project_id, q: q.q, from: q.from, to: q.to }
+  const shown = crewRowsFor(rows, q.view, today, filters)
+  const isProjects = q.view === 'projects'
+  const projects = isProjects ? crewByProject(shown, today) : []
+  const totals = projects.reduce(
+    (a, p) => ({ booked: a.booked + p.booked, paid: a.paid + p.paid, owed: a.owed + p.owed, upcoming: a.upcoming + p.upcoming }),
+    { booked: 0, paid: 0, owed: 0, upcoming: 0 },
+  )
+  return {
+    ...crewOwedFrom(rows, today),
+    view: q.view,
+    bookings: rows.length,
+    owed_count: crewRowsFor(rows, 'owed', today).length,
+    rows: isProjects ? [] : shown.slice(0, q.limit),
+    rows_total: shown.length,
+    persons: isProjects ? [] : crewPersonTotals(shown, today).map((p) => ({ ...p, owed: roundINR(p.owed), ahead: roundINR(p.ahead) })),
+    projects: projects.slice(0, q.limit),
+    projects_total: projects.length,
+    project_totals: { booked: roundINR(totals.booked), paid: roundINR(totals.paid), owed: roundINR(totals.owed), upcoming: roundINR(totals.upcoming) },
+  }
 }

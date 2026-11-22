@@ -19,10 +19,10 @@ import { usePeriod } from '@/features/financials/use-period'
 import { PeriodSwitch } from '@/features/financials/PeriodSwitch'
 import { MoneyTile } from '@/features/billing/MoneyTile'
 import { downloadCsv, toCsv } from '@/shared/ui/csv'
-import { useBillingDue, useReceivedPayment, useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
+import { DUE_LINES_PAGE, useBillingDue, useReceivedPayment, useReceivedPayments, type ReceivedPaymentFilters } from '@/features/billing/api'
 import { DuePanel } from '@/features/billing/DuePanel'
 import { todayInIndia } from '@/shared/ui/days-left'
-import { useClients } from '@/features/clients/api'
+import { ClientPicker } from '@/features/clients/ClientPicker'
 import { useActiveLookups } from '@/features/settings/api'
 import { ProjectPicker } from '@/features/projects/ProjectPicker'
 import { DeleteReceivedPaymentDialog } from '@/features/billing/ReceivedPaymentDialogs'
@@ -65,7 +65,13 @@ function PaymentsSection() {
   const due = useBillingDue({ from, to })
   const [dueParam, setDueParam] = useUrlParam('due')
   const dueView = (['overdue', 'soon', 'later'].includes(dueParam) ? dueParam : '') as '' | 'overdue' | 'soon' | 'later'
-  const setDueView = (v: '' | 'overdue' | 'soon' | 'later') => setDueParam(v)
+  const [dueLimit, setDueLimit] = useState(DUE_LINES_PAGE)
+  const setDueView = (v: '' | 'overdue' | 'soon' | 'later') => {
+    setDueLimit(DUE_LINES_PAGE)
+    setDueParam(v)
+  }
+  // The open tile's own lines, read only once a tile is opened.
+  const dueLines = useBillingDue({ from, to }, { lines: dueView || 'overdue', limit: dueLimit, enabled: !!dueView })
   const [markId, setMarkId] = useState<string | null>(null)
   const marking = useReceivedPayment(markId)
   const [mode, setMode] = useUrlParam('mode')
@@ -76,8 +82,6 @@ function PaymentsSection() {
   const [editTarget, setEditTarget] = useState<ReceivedPayment | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ReceivedPayment | null>(null)
   const [emailTarget, setEmailTarget] = useState<ReceivedPayment | null>(null)
-  const { data: clientsData } = useClients()
-  const clients = Array.isArray(clientsData) ? clientsData : (clientsData?.items ?? [])
   // The built-in modes plus any the studio has added of its own.
   const { data: customModes } = useActiveLookups('payment_type')
   const modes = [...MODES, ...(customModes ?? []).map((m) => m.value).filter((v) => !MODES.some((x) => x.toLowerCase() === v.toLowerCase()))]
@@ -197,11 +201,14 @@ function PaymentsSection() {
         </div>
       )}
 
-      {due.data && dueView && (
+      {dueView && dueLines.data && (
         <DuePanel
           title={dueView === 'overdue' ? 'Overdue' : dueView === 'soon' ? 'Due in the next 30 days' : 'Later'}
-          lines={due.data.lines.filter((l) => l.bucket === dueView)}
-          today={due.data.today}
+          lines={dueLines.data.lines.filter((l) => l.bucket === dueView)}
+          total={dueLines.data.lines_total}
+          loadingMore={dueLines.isFetching}
+          onShowMore={() => setDueLimit((n) => n + DUE_LINES_PAGE)}
+          today={dueLines.data.today}
           onMarkReceived={(id) => setMarkId(id)}
         />
       )}
@@ -234,12 +241,13 @@ function PaymentsSection() {
             <option value="pending">Promised</option>
             <option value="gst">With GST</option>
           </Select>
-          <Select value={clientId} onChange={(e) => { setClientId(e.target.value); setProjectId(''); setPage(1) }} className="w-full sm:w-44" aria-label="Filter by client">
-            <option value="">All clients</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
+          <ClientPicker
+            value={clientId}
+            onChange={(id) => { setClientId(id); setProjectId(''); setPage(1) }}
+            noneLabel="All clients"
+            className="sm:w-44"
+            aria-label="Filter by client"
+          />
           <ProjectPicker
             value={projectId}
             onChange={(id) => { setProjectId(id); setPage(1) }}

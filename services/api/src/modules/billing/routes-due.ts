@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { billingOverview, billingDue, type DueLineRow } from '@ipc/contracts'
+import { billingOverview, billingDue, dueLinesWanted, type DueLineRow, type DueLinesWanted } from '@ipc/contracts'
 import { allocateDue, dueBucket, instalmentAmounts, planDueDate } from '@ipc/domain'
 import { planInstalmentsFrom } from '../../lib/plan'
 import type { AppEnv } from '../../context'
@@ -7,6 +7,27 @@ import { fail } from '../../middleware/errors'
 import { todayInIndia } from '../../lib/dates'
 import { withUser } from '../../lib/db'
 import { attempt } from '../../lib/attempt'
+
+/** How many of a bucket's lines one read sends unless asked for more. */
+export const DUE_LINES_PAGE = 50
+const DUE_LINES_MAX = 1000
+
+/**
+ * The lines a read asked for (speed check, 22 Nov: a studio with a thousand
+ * projects sent 925 KB of lines to Home, which shows only the tiles). `all`,
+ * the default, keeps the old answer; `none` is the tiles alone; a bucket is
+ * that bucket's first `limit` lines, in date order, and how many it has.
+ */
+export function dueLinesFor(
+  lines: readonly DueLineRow[],
+  wanted: DueLinesWanted,
+  limit: number,
+): { lines: DueLineRow[]; lines_total?: number } {
+  if (wanted === 'all') return { lines: [...lines] }
+  if (wanted === 'none') return { lines: [], lines_total: 0 }
+  const xs = lines.filter((l) => l.bucket === wanted)
+  return { lines: xs.slice(0, limit), lines_total: xs.length }
+}
 
 export const billingDueRoutes = new Hono<AppEnv>()
   /**
@@ -18,6 +39,10 @@ export const billingDueRoutes = new Hono<AppEnv>()
   .get('/due', async (c) => {
     const from = c.req.query('from')
     const to = c.req.query('to')
+    const wanted = dueLinesWanted.safeParse(c.req.query('lines') ?? 'all')
+    if (!wanted.success) fail(422, 'Ask for none, overdue, soon, later or all of the lines.')
+    const limitRaw = Number(c.req.query('limit') ?? DUE_LINES_PAGE)
+    const limit = Number.isFinite(limitRaw) ? Math.min(DUE_LINES_MAX, Math.max(1, Math.floor(limitRaw))) : DUE_LINES_PAGE
     const day = /^\d{4}-\d{2}-\d{2}$/
     const today = todayInIndia()
     const data = await attempt(c, 'billing.due', () =>
@@ -102,7 +127,16 @@ export const billingDueRoutes = new Hono<AppEnv>()
       return { amount: Math.round(xs.reduce((n, l) => n + l.amount, 0) * 100) / 100, count: xs.length }
     }
     lines.sort((a, b) => (a.due_on ?? '9999').localeCompare(b.due_on ?? '9999'))
-    return c.json(billingDue.parse({ today, overdue: tile('overdue'), soon: tile('soon'), later: tile('later'), received: data.received, lines }))
+    return c.json(
+      billingDue.parse({
+        today,
+        overdue: tile('overdue'),
+        soon: tile('soon'),
+        later: tile('later'),
+        received: data.received,
+        ...dueLinesFor(lines, wanted.data, limit),
+      }),
+    )
   })
 
   /**

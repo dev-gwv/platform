@@ -25,7 +25,7 @@ interface ClientDirectoryQuery {
 }
 
 /** Legacy array shape (no params) — kept for existing callers. */
-export function useClients(query?: ClientDirectoryQuery) {
+export function useClients(query?: ClientDirectoryQuery, opts: { enabled?: boolean } = {}) {
   const { session } = useAuth()
   const access = useAccess()
   const hasParams = !!query && Object.keys(query).length > 0
@@ -47,7 +47,7 @@ export function useClients(query?: ClientDirectoryQuery) {
       if (q.created_to?.trim()) params.set('created_to', q.created_to.trim())
       return callApi(`/clients?${params.toString()}`, { responseSchema: clientPage })
     },
-    enabled: !!session && access.hasModule('clients'),
+    enabled: !!session && access.hasModule('clients') && (opts.enabled ?? true),
     staleTime: 30_000,
   })
 }

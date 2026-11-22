@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crewBucketOf, crewMonthDue, summarizeCrewOwed, type CrewPayoutLine } from './crew-owed'
+import { crewBucketOf, crewMonthDue, crewPersonTotals, summarizeCrewOwed, type CrewPayoutLine } from './crew-owed'
 
 const line = (o: Partial<CrewPayoutLine>): CrewPayoutLine => ({
   user_id: 'a',
@@ -81,5 +81,23 @@ describe('crewMonthDue (Payroll shoot payouts)', () => {
     const month = crewMonthDue(lines, '2026-09-01', '2026-10-31', today)
     const owed = summarizeCrewOwed(lines, today).owed_now
     expect(month.reduce((n, p) => n + p.due, 0)).toBe(owed)
+  })
+})
+
+describe('crewPersonTotals', () => {
+  it('adds each person up over every row, in the order they first appear', () => {
+    const t = crewPersonTotals(
+      [
+        line({ user_id: 'b', user_name: 'Bilal', amount: 5000, paid: 1000 }),
+        line({ amount: 10000 }),
+        line({ shoot_date: '2026-10-05', amount: 8000, paid: 3000 }),
+        line({ shoot_date: '2026-10-06', amount: 2000, paid: 2000 }),
+      ],
+      '2026-10-02',
+    )
+    expect(t).toEqual([
+      { user_id: 'b', user_name: 'Bilal', owed: 4000, ahead: 0, ahead_shoots: 0, shoots: 1 },
+      { user_id: 'a', user_name: 'Asha', owed: 10000, ahead: 5000, ahead_shoots: 1, shoots: 3 },
+    ])
   })
 })

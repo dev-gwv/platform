@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router'
+import { ChevronDown } from 'lucide-react'
 import type { DueLineRow } from '@ipc/contracts'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent } from '@/shared/ui/card'
 import { cn } from '@/shared/ui/cn'
 import { useINR } from '@/shared/money/MoneyMask'
 import { daysLeft } from '@/shared/ui/days-left'
+import { showingLine } from '@/features/tasks/open-pages'
 
 const KIND: Record<DueLineRow['kind'], string> = {
   invoice: 'Invoice',
@@ -21,14 +23,22 @@ const KIND: Record<DueLineRow['kind'], string> = {
 export function DuePanel({
   title,
   lines,
+  total,
+  loadingMore = false,
+  onShowMore,
   today,
   onMarkReceived,
 }: {
   title: string
   lines: readonly DueLineRow[]
+  /** How many lines the tile has in all; more than `lines` brings Show more. */
+  total?: number | undefined
+  loadingMore?: boolean
+  onShowMore?: () => void
   today: string
   onMarkReceived: (paymentId: string) => void
 }) {
+  const more = total !== undefined && total > lines.length && !!onShowMore
   const inr = useINR()
   return (
     <Card className="mb-4">
@@ -72,6 +82,14 @@ export function DuePanel({
               </li>
             ))}
           </ul>
+        )}
+        {more && (
+          <div className="flex flex-wrap items-center justify-center gap-3 border-t border-border px-4 py-2.5">
+            <span className="text-xs text-muted-foreground tabular-nums">{showingLine(lines.length, total)}</span>
+            <Button type="button" variant="outline" size="sm" disabled={loadingMore} onClick={onShowMore}>
+              <ChevronDown /> {loadingMore ? 'Loading…' : 'Show more'}
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

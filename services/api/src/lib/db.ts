@@ -50,6 +50,18 @@ export const pgTypes = {
 
 const TYPES = pgTypes
 
+/**
+ * Startup settings for every pooled connection. `jit: 'off'`: Postgres's JIT
+ * compiler starts on any query its planner costs above 100,000, and the
+ * report functions (profitability, profit and loss) estimate in the millions
+ * because each correlated sub-select is repeated in every expression that
+ * reads it. On a studio with 1,000 projects the compile alone took 1.3-2.8 s
+ * a query -- 4 of the 5.5 s Financials waited on the profitability report,
+ * and 1.6 of the 1.7 s for its P&L (speed check, 22 Nov). Our queries are
+ * short reads; none runs long enough for compiled code to pay back.
+ */
+export const connectionSettings = { jit: 'off' } as const
+
 export function db(env: Env): Sql {
   if (!_sql) {
     _sql = postgres(env.DATABASE_URL, {
@@ -61,6 +73,7 @@ export function db(env: Env): Sql {
       // cache to avoid plan-cache surprises across SET ROLE boundaries.
       prepare: false,
       types: TYPES,
+      connection: connectionSettings,
     })
   }
   return _sql
