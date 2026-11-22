@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { TaskColumns, TaskListItem, TaskStatus } from '@ipc/contracts'
 import {
   appendToColumn,
+  boardNarrowed,
+  laneOrderBody,
   laneOf,
   moreInColumn,
   moveTasks,
   reorderColumn,
+  showMoreLabel,
   taskColumnPagePath,
   taskColumnsPath,
   type BoardQuery,
@@ -117,5 +120,32 @@ describe('what a lane shows', () => {
 
   it('an empty board is empty lanes', () => {
     expect(laneOf(undefined, 'review')).toEqual({ items: [], count: 0, more: 0, cursor: null })
+  })
+})
+
+describe('the Show more button', () => {
+  it('says everything the column has left, as the Leads pipeline does, not the next 30', () => {
+    const big: TaskColumns['columns'][number] = { status: 'to_do', total: 375, items: board().columns[0]!.items, next_cursor: 'c' }
+    expect(showMoreLabel(moreInColumn(big))).toBe('Show 372 more')
+    expect(showMoreLabel(1250)).toBe('Show 1,250 more')
+    expect(showMoreLabel(40, true)).toBe('Loading…')
+  })
+})
+
+describe('the order a drag saves', () => {
+  it('unfiltered: the cards shown, and the rest after them only when the lane holds more', () => {
+    expect(laneOrderBody(base, 'to_do', [id(2), id(1)], true)).toEqual({ board_view: 'default', lane_key: 'to_do', task_ids: [id(2), id(1)], rest_after: true })
+    expect(laneOrderBody(base, 'to_do', [id(2), id(1)], false)).toEqual({ board_view: 'default', lane_key: 'to_do', task_ids: [id(2), id(1)] })
+  })
+
+  it('filtered by a search, a person, a date or a project: the hidden cards keep their places', () => {
+    for (const f of [{ q: 'album' }, { member: id(7) }, { member: 'none' }, { mine: true }, { due: 'overdue' }, { project: id(9) }]) {
+      const b = { ...base, ...f }
+      expect(boardNarrowed(b)).toBe(true)
+      const body = laneOrderBody(b, 'review', [id(3)], true)
+      expect(body).toMatchObject({ keep_hidden: true, task_ids: [id(3)] })
+      expect(body).not.toHaveProperty('rest_after')
+    }
+    expect(boardNarrowed({ ...base, q: '   ' })).toBe(false)
   })
 })

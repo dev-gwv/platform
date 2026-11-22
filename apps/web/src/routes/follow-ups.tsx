@@ -309,10 +309,14 @@ function Crm() {
         *
         * Sticky, because on a board that scrolls sideways and a list four
         * hundred rows long, the controls scrolling away means scrolling back up
-        * to change anything.
+        * to change anything. Not on a phone (phone check, 22 Nov): there it
+        * wraps to four rows and held a third of the screen over the leads.
+        *
+        * The strip above it covers the scroll box's padding, where cards
+        * scrolled under it used to peek out between it and the top bar.
         */}
       <LeadLimitLine />
-      <div className="sticky top-0 z-20 -mx-1 mt-2 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1">
+      <div className="-mx-1 mt-3 flex flex-wrap items-center gap-2 border-b border-border bg-background px-1 pb-3 pt-1 sm:sticky sm:top-0 sm:z-20 sm:before:absolute sm:before:inset-x-0 sm:before:bottom-full sm:before:h-3 sm:before:bg-background md:mt-4 md:before:h-4">
         <Segmented
           label="How to show these leads"
           value={mode}

@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, EyeOff, Eye, GripVertical, Lock, MoreHorizontal,
 import { toast } from 'sonner'
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCenter,
   useDraggable,
@@ -57,7 +57,7 @@ function ShowMore({ more, onShow, loading = false }: { more: number; onShow: () 
       type="button"
       onClick={onShow}
       disabled={loading}
-      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
+      className="min-h-[40px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary/50 hover:bg-muted"
     >
       {loading ? 'Loading…' : `Show ${more} more`}
     </button>
@@ -156,7 +156,10 @@ export function PipelineTab({
   const access = useAccess()
   const canEdit = access.hasAction('crm', 'edit')
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    // A mouse, not every pointer: a finger's pointerdown reached PointerSensor
+    // first, took the drag, and the browser cancelled it on the first move to
+    // scroll instead -- press-and-hold never moved a card (phone check, 22 Nov).
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A press-and-hold drags on a phone, the same as the production board;
     // a swipe still scrolls (audit, 18 Nov: only a mouse could move a card).
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),

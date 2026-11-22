@@ -14,7 +14,7 @@ export function ShowOlderDone({ older, className }: { older: ReturnType<typeof u
   if (!older.hasMore) return null
   return (
     <div className={className ?? 'mt-3 flex justify-center'}>
-      <Button type="button" variant="outline" size="sm" disabled={older.loading} onClick={older.more}>
+      <Button type="button" variant="outline" size="sm" className="h-[40px]" disabled={older.loading} onClick={older.more}>
         <History /> {older.loading ? 'Loading…' : older.rows.length ? 'Show more older done tasks' : 'Show older done tasks'}
       </Button>
     </div>

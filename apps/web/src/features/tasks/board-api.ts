@@ -5,7 +5,7 @@ import { taskColumnPage, taskColumns, z, type TaskColumns, type TaskListItem, ty
 import { callApi } from '@/shared/api/client'
 import { useAuth } from '@/shared/auth/AuthProvider'
 import { refreshTasks } from './refresh'
-import { appendToColumn, moveTasks, reorderColumn, taskColumnPagePath, taskColumnsPath, type BoardQuery } from './board-columns'
+import { appendToColumn, laneOrderBody, moveTasks, reorderColumn, taskColumnPagePath, taskColumnsPath, type BoardQuery } from './board-columns'
 
 const COLUMNS: QueryKey = ['tasks', 'columns']
 const columnsKey = (b: BoardQuery): QueryKey => [...COLUMNS, b]
@@ -65,7 +65,8 @@ const laneHasMore = (d: TaskColumns | undefined, status: TaskStatus) => !!d?.col
  * A card dragged, or ticked cards moved from the bulk bar. The cards land at
  * once -- both columns' cards and header counts -- and go back if the server
  * refuses. A drag also saves the hand order of the lanes it touched (the
- * cards loaded; a card further down keeps its place). Afterwards one request
+ * cards loaded; a card further down keeps its place, and so does every card
+ * a search or person filter hides). Afterwards one request
  * per list on screen refreshes what the browser cannot know.
  */
 export function useBoardMoves(b: BoardQuery) {
@@ -91,7 +92,7 @@ export function useBoardMoves(b: BoardQuery) {
   const order = (lane: TaskStatus, ids: string[], after: TaskColumns | undefined) =>
     callApi('/tasks/board/order', {
       method: 'POST',
-      body: { board_view: 'default', lane_key: lane, task_ids: ids, ...(laneHasMore(after, lane) ? { rest_after: true } : {}) },
+      body: laneOrderBody(b, lane, ids, laneHasMore(after, lane)),
       responseSchema: anySchema,
     })
   const status = (id: string, to: TaskStatus) =>

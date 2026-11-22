@@ -280,6 +280,12 @@ export const setBoardOrderRequest = z.object({
    * time): every other card in the lane keeps its order, after them.
    */
   rest_after: z.boolean().optional(),
+  /**
+   * The ids are the cards a filtered board shows (a search or a person
+   * picked): they take each other's places in this order, and every card the
+   * filter hides, or not loaded yet, keeps its own place. Wins over rest_after.
+   */
+  keep_hidden: z.boolean().optional(),
 })
 export type SetBoardOrderRequest = z.infer<typeof setBoardOrderRequest>
 

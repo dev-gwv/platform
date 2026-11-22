@@ -24,7 +24,7 @@ export function ShowMoreLeads({
   return (
     <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
       <span className="text-xs text-muted-foreground tabular-nums">{showingLine(shown, total)} leads</span>
-      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={onMore}>
+      <Button type="button" variant="outline" size="sm" className="h-[40px]" disabled={loading} onClick={onMore}>
         <ChevronDown /> {loading ? 'Loading…' : 'Show more'}
       </Button>
     </div>
